@@ -7,16 +7,18 @@ from typing import Any
 
 from redteam.llm.base import LLMError, LLMRefusal
 
-DEFAULT_MODEL = "claude-opus-5-5"
+# Agents make many small, structured calls per round, so a fast model is the default.
+# Pass --model to the CLI to run the agents on a larger one.
+DEFAULT_MODEL = "claude-haiku-5-5"
 INSTALL_HINT = "pip install 'codebase-red-team[anthropic]'"
 
 
 class AnthropicBackend:
     """Calls Claude and returns the JSON object it produces.
 
-    Structured outputs guarantee schema-valid JSON. Server-side fallbacks retry
-    on another model if a safety classifier declines, because security-flavoured
-    prompts can trip it.
+    Structured outputs guarantee schema-valid JSON. Security-flavoured prompts can
+    occasionally trip a safety classifier; that surfaces as LLMRefusal, and the
+    agents fall back to their offline strategies.
     """
 
     name = "anthropic"
@@ -36,7 +38,7 @@ class AnthropicBackend:
 
     def complete_json(self, *, system: str, prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
         """Ask the model for a JSON object that matches `schema`."""
-        response = self.client.beta.messages.create(
+        response = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
             system=system,
@@ -45,8 +47,6 @@ class AnthropicBackend:
                 "effort": self.effort,
                 "format": {"type": "json_schema", "schema": schema},
             },
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
         )
         if response.stop_reason == "refusal":
             details = response.stop_details
