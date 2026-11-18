@@ -34,14 +34,14 @@ def _response(
 
 
 def _stub_client(response: SimpleNamespace) -> SimpleNamespace:
-    """A client whose beta.messages.create records its kwargs and returns `response`."""
+    """A client whose messages.create records its kwargs and returns `response`."""
     calls: list[dict[str, Any]] = []
 
     def create(**kwargs: Any) -> SimpleNamespace:
         calls.append(kwargs)
         return response
 
-    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    client = SimpleNamespace(messages=SimpleNamespace(create=create))
     client.calls = calls  # type: ignore[attr-defined]
     return client
 
@@ -105,8 +105,7 @@ def test_anthropic_returns_parsed_object_and_sends_expected_kwargs() -> None:
     assert result == {"ok": True}
     assert backend.name == "anthropic"
     (kwargs,) = client.calls
-    assert kwargs["model"] == "claude-opus-5-5"
-    assert kwargs["fallbacks"] == "default"
+    assert kwargs["model"] == "claude-haiku-5-5"
     assert kwargs["system"] == "sys"
     assert kwargs["messages"] == [{"role": "user", "content": "hello"}]
     assert kwargs["output_config"]["format"] == {"type": "json_schema", "schema": SCHEMA}
@@ -203,4 +202,4 @@ def test_make_backend_unknown_name_raises_value_error() -> None:
 
 
 def test_default_model_constant() -> None:
-    assert DEFAULT_MODEL == "claude-opus-5-5"
+    assert DEFAULT_MODEL == "claude-haiku-5-5"
