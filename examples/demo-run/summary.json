@@ -1,0 +1,12 @@
+{
+  "accepted_patches": {
+    "crash:GET /notes": 1,
+    "idor:GET /notes/{note_id}": 1,
+    "path_traversal:GET /files": 2,
+    "sqli:GET /notes/search": 2
+  },
+  "hardened": true,
+  "open_keys": [],
+  "rounds": 3,
+  "stop_reason": "clean_round"
+}

