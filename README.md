@@ -4,7 +4,9 @@
 
 An attacker agent breaks a deliberately vulnerable web app. A patcher agent fixes it. Every fix has to survive the attacker's next round, which mutates exactly the payloads that were just blocked. Then a held-out audit checks whether the loop's own "hardened" verdict can be trusted.
 
-**Result:** when the attacker only scans once, the loop declares rushed fixes "hardened" while held-out exploits still get in (3 of 11 on one app, 7 of 11 on the other). When the attacker adapts to what was blocked, it catches every rushed fix, and every final app passes the audit.
+**Result:** when the attacker only scans once, the loop declares rushed fixes "hardened" while held-out exploits still get in (3 of 11 on one app, 7 of 11 on the other). When the attacker adapts to what was blocked, it catches every rushed fix, and every final app passes the audit. A white-box attacker that reads the source, with no hand-written exploits at all, gets the same clean result.
+
+![Arms race on billing, white-box attacker](examples/billing-whitebox-run/timeline.svg)
 
 ```
 $ python -m redteam bench
@@ -12,10 +14,14 @@ notes adaptive naive-first: hardened, audit 0/11
 notes adaptive correct-first: hardened, audit 0/11
 notes one-shot naive-first: hardened, audit 3/11 (false confidence)
 notes one-shot correct-first: hardened, audit 0/11
+notes white-box naive-first: hardened, audit 0/11
+notes white-box correct-first: hardened, audit 0/11
 billing adaptive naive-first: hardened, audit 0/11
 billing adaptive correct-first: hardened, audit 0/11
 billing one-shot naive-first: hardened, audit 7/11 (false confidence)
 billing one-shot correct-first: hardened, audit 0/11
+billing white-box naive-first: hardened, audit 0/11
+billing white-box correct-first: hardened, audit 0/11
 ```
 
 ## Why
@@ -31,27 +37,49 @@ This project treats hardening as an adversarial loop instead:
 
 ## The benchmark
 
-`redteam bench` attacks every target under four strategies and audits each final app. From the [recorded scorecard](examples/bench/SCORECARD.md):
+`redteam bench` attacks every target with three attackers, each paired with two patchers, and audits each final app. From the [recorded scorecard](examples/bench/SCORECARD.md):
 
-| Target | Attacker | Patcher | Bypasses caught | Loop says | Audit | False confidence |
-|---|---|---|---|---|---|---|
-| notes | adaptive | naive-first | 2 | hardened | 0 of 11 landed | no |
-| notes | adaptive | correct-first | 0 | hardened | 0 of 11 landed | no |
-| notes | one-shot | naive-first | 0 | hardened | 3 of 11 landed | **yes** |
-| notes | one-shot | correct-first | 0 | hardened | 0 of 11 landed | no |
-| billing | adaptive | naive-first | 3 | hardened | 0 of 11 landed | no |
-| billing | adaptive | correct-first | 0 | hardened | 0 of 11 landed | no |
-| billing | one-shot | naive-first | 0 | hardened | 7 of 11 landed | **yes** |
-| billing | one-shot | correct-first | 0 | hardened | 0 of 11 landed | no |
+| Target | Attacker | Patcher | Probes sent | Bypasses caught | Loop says | Audit | Scout leads left | False confidence |
+|---|---|---|---|---|---|---|---|---|
+| notes | adaptive | naive-first | 59 | 2 | hardened | 0 of 11 landed | 0 | no |
+| notes | adaptive | correct-first | 31 | 0 | hardened | 0 of 11 landed | 0 | no |
+| notes | one-shot | naive-first | 18 | 0 | hardened | 3 of 11 landed | 2 | **yes** |
+| notes | one-shot | correct-first | 18 | 0 | hardened | 0 of 11 landed | 0 | no |
+| notes | white-box | naive-first | 95 | 1 | hardened | 0 of 11 landed | 0 | no |
+| notes | white-box | correct-first | 55 | 0 | hardened | 0 of 11 landed | 0 | no |
+| billing | adaptive | naive-first | 45 | 3 | hardened | 0 of 11 landed | 0 | no |
+| billing | adaptive | correct-first | 22 | 0 | hardened | 0 of 11 landed | 0 | no |
+| billing | one-shot | naive-first | 14 | 0 | hardened | 7 of 11 landed | 3 | **yes** |
+| billing | one-shot | correct-first | 14 | 0 | hardened | 0 of 11 landed | 0 | no |
+| billing | white-box | naive-first | 77 | 1 | hardened | 0 of 11 landed | 0 | no |
+| billing | white-box | correct-first | 44 | 0 | hardened | 0 of 11 landed | 0 | no |
 
-- **Adaptive** sends seed hypotheses, then mutates everything that landed and every mutation that was blocked. **One-shot** replays its seeds each round, like a scanner run after every fix.
-- **Naive-first** ships the kind of rushed fix teams really merge (a keyword blocklist, a string strip), then the real fix if that one is bypassed. **Correct-first** goes straight to the real fix.
-- **Audit** replays held-out exploits against the final app, each in a fresh copy. They are written apart from the playbook and never shown to the attacker.
+- **Adaptive** sends seed hypotheses, then mutates everything that landed and every mutation that was blocked. **One-shot** replays its seeds each round, like a scanner run after every fix. **White-box** reads the app's source before every round and attacks what the [source scout](#white-box-mode) finds, with no hand-written seeds.
+- **Naive-first** ships the kind of rushed fix teams really merge (a keyword blocklist, a string strip), then the real fix once that one is bypassed or rejected. **Correct-first** goes straight to the real fix.
+- **Audit** replays held-out exploits against the final app, each in a fresh copy. They are written apart from the playbook and never shown to any attacker.
+- **Scout leads left** is what the static scout still flags in the final app. It agrees with the audit: the two runs it flags are exactly the two with false confidence.
 - **False confidence** means the loop reported hardened while the audit still got in. Only the one-shot attacker paired with naive fixes produces it, and on both targets it does.
+
+## White-box mode
+
+The black-box attackers start from exploits someone wrote down for each app. The white-box attacker starts from the code. `redteam scout` parses the app with Python's `ast` module (it never runs it), follows request parameters to dangerous sinks, and turns each one into a lead with probes that would confirm it:
+
+```
+$ python -m redteam scout --target notes
+path_traversal  GET /files  line 102  request parameter name is joined into a path that is read without a containment check  (4 probes)
+crash  GET /notes  line 69  request parameter limit is a str converted with int() without a range check  (3 probes)
+sqli  GET /notes/search  line 88  query text is built with an f-string from parameter q  (3 probes)
+idor  GET /notes/{note_id}  line 93  path id note_id reaches a query and the handler never reads the current user  (5 probes)
+4 leads in notes
+```
+
+It finds all eight seeded weaknesses across both apps with no false leads. It keeps flagging a rushed fix, because a keyword blocklist still builds the query with an f-string. It goes quiet once the real fixes land, because a parameterised query or a resolved-path containment check clears its rule.
+
+Because the scout sends several variants of each exploit up front, most rushed fixes never ship: the verification gate sees a second variant still landing and rejects the patch, so the patcher escalates to the real fix. The [white-box billing run](examples/billing-whitebox-run/ARMS_RACE.md) shows this. The gate rejects the rushed SSRF and mass-assignment fixes in round 1, a rushed header fix slips through and is bypassed in round 2, and the run ends hardened with a clean audit in three rounds.
 
 ## Two targets
 
-Both are small FastAPI services with seeded weaknesses. A target bundles its app, the requests a legitimate user must keep making, the attacker's first hypotheses, a fix catalog and its audit exploits, so adding a third is one directory.
+Both are small FastAPI services with seeded weaknesses. A target bundles its app, the requests a legitimate user must keep making, the attacker's first hypotheses, a fix catalog and its audit exploits, so adding a third is one directory ([guide](docs/adding-a-target.md)).
 
 | Target | Weakness | Rushed fix | Bypass the adaptive attacker found |
 |---|---|---|---|
@@ -63,11 +91,12 @@ Both are small FastAPI services with seeded weaknesses. A target bundles its app
 | billing | trusted `X-Forwarded-User` header | ignore the value `admin` | `X-Forwarded-User: Admin` |
 | billing | missing ownership check | (real fix first) | |
 
-The recorded runs tell each story round by round: [notes](examples/notes-run/ARMS_RACE.md) and [billing](examples/billing-run/ARMS_RACE.md). Each run writes:
+The recorded runs tell each story round by round: [notes](examples/notes-run/ARMS_RACE.md), [billing](examples/billing-run/ARMS_RACE.md) and [billing, white-box](examples/billing-whitebox-run/ARMS_RACE.md). Each run writes:
 
 | File | What it holds |
 |---|---|
-| `ARMS_RACE.md` | scoreboard, independent audit and round-by-round story |
+| `ARMS_RACE.md` | scoreboard, timeline, independent audit and round-by-round story |
+| `timeline.svg` | one row per weakness, one column per round: found, open, bypassed or closed |
 | `events.jsonl` | every probe, finding, bypass and patch decision |
 | `regressions.json` | every probe that ever landed, by weakness |
 | `final_app.py` | the hardened source |
@@ -78,7 +107,7 @@ The recorded runs tell each story round by round: [notes](examples/notes-run/ARM
 ```mermaid
 flowchart LR
     subgraph Arena["Arena (one round)"]
-        A["Attacker<br/>playbook + mutations<br/>or Claude"] -->|probes| S["Sandbox<br/>working copy of the target<br/>in-process only"]
+        A["Attacker<br/>playbook, source scout<br/>+ mutations, or Claude"] -->|probes| S["Sandbox<br/>working copy of the target<br/>in-process only"]
         S -->|responses| O["Oracle<br/>canary leak or 5xx"]
         O -->|findings| P["Patcher<br/>fix catalog<br/>or Claude"]
         P -->|text edits| G{"Verification gate"}
@@ -87,13 +116,14 @@ flowchart LR
         O --> L["Ledger<br/>events, regressions,<br/>ARMS_RACE.md"]
     end
     L -.->|landed and blocked history| A
+    S -.->|current source, white-box| A
     Arena -->|final app| AU["Held-out audit<br/>exploits the attacker never saw"]
 ```
 
-1. **Attacker** plans a batch of probes from the app's route list and the attack history. The offline `PlaybookAttacker` starts with the target's hypotheses, then mutates every exploit that landed and every mutation that was blocked (keyword case, quote styles, nested traversal, encoded separators, boundary integers, neighbouring ids, JSON key spellings, URL host spellings, header value casing). The `LLMAttacker` asks Claude for probes, including headers and a JSON body, as schema-checked JSON.
+1. **Attacker** plans a batch of probes from the app's route list and the attack history. The offline `PlaybookAttacker` starts with the target's hypotheses, then mutates every exploit that landed and every mutation that was blocked (keyword case, quote styles, nested traversal, encoded separators, boundary integers, neighbouring ids, JSON key spellings, URL host spellings, header value casing). The white-box `ScoutAttacker` re-reads the current source each round and starts from the scout's leads instead. The `LLMAttacker` asks Claude for probes, including headers and a JSON body, as schema-checked JSON.
 2. **Sandbox** loads a per-run working copy of the target behind a test client and sends each probe. For targets where an exploit changes state (promoting yourself to admin), the app is rebuilt before every probe so one landing cannot make later probes look like exploits.
 3. **Oracle** has two rules. A response that contains the run's random canary is a leak; any 5xx is a crash. That one leak rule covers SQL injection, broken access control and path traversal.
-4. **Patcher** proposes exact `{old, new}` text edits for each finding. The offline `ReferencePatcher` replays a fix catalog; the `LLMPatcher` asks Claude and only ever sees redacted evidence.
+4. **Patcher** proposes exact `{old, new}` text edits for each finding. The offline `ReferencePatcher` replays a fix catalog, escalating to the next fix after one is bypassed or rejected; the `LLMPatcher` asks Claude and only ever sees redacted evidence.
 5. **Verification gate** applies the edits to a fresh copy and accepts them only if all of these hold:
    - the patched app loads
    - the exploit no longer lands
@@ -130,7 +160,9 @@ pip install -e ".[dev]"
 
 python -m redteam run --target notes --out runs/notes     # offline, deterministic, no API key
 python -m redteam run --target billing --out runs/billing
-python -m redteam bench --out runs/bench                   # all targets, four strategies, SCORECARD.md
+python -m redteam run --target billing --attacker white-box --out runs/whitebox
+python -m redteam scout --target billing                   # static leads only, nothing is run
+python -m redteam bench --out runs/bench                   # all targets, six strategies, SCORECARD.md
 pytest
 ```
 
@@ -154,27 +186,29 @@ src/redteam/
   targets/billing/           invoicing service: mass assignment, SSRF, header trust, IDOR
   sandbox.py                 in-process loader and the path-only probe boundary
   oracle.py                  canary leak and crash detection, evidence redaction
-  agents/attacker.py         PlaybookAttacker, mutation engine, LLMAttacker
+  agents/attacker.py         PlaybookAttacker, ScoutAttacker, mutation engine, LLMAttacker
   agents/patcher.py          ReferencePatcher fix catalog, LLMPatcher
   patching.py                exact-match text edits
   gate.py                    verification gate and functional checks
   arena.py                   the round loop and the ARMS_RACE.md report
+  scout.py                   static source scout (ast only) for white-box leads
+  timeline.py                timeline.svg for every run
   audit.py                   held-out exploit replay
   bench.py                   strategy matrix and SCORECARD.md
   ledger.py                  append-only event log
   llm/                       LLMBackend protocol, Claude backend, offline fake
-  cli.py                     redteam run and redteam bench
-examples/                    recorded runs for both targets and the benchmark
+  cli.py                     redteam run, redteam scout and redteam bench
+examples/                    recorded runs (both targets, plus white-box billing) and the benchmark
 tests/                       unit tests, full offline runs, and replays of the recordings
 ```
 
 ## How this repo was built
 
-The repo was built the way it describes: by agents, through an ordinary software lifecycle. A planning agent wrote the [design doc](docs/design.md), split the work into milestones ([one](https://github.com/AkshayTallikar/codebase-red-team/milestone/1), [two](https://github.com/AkshayTallikar/codebase-red-team/milestone/2)) of issues, and wrote an interface spec for each one. Smaller coding agents implemented each issue on its own branch. The planner reviewed the code, corrected what the specs got wrong (one held-out exploit, for instance, only works against the naively patched app, so the audit test checks "breaks the seed or the naive fix"), opened one pull request per issue, and merged each one only after CI passed on Python 3.11, 3.12 and 3.13. CI needs no API key, because every LLM path is tested against an offline fake.
+The repo was built the way it describes: by agents, through an ordinary software lifecycle. A planning agent wrote the [design doc](docs/design.md), split the work into milestones ([one](https://github.com/AkshayTallikar/codebase-red-team/milestone/1), [two](https://github.com/AkshayTallikar/codebase-red-team/milestone/2), [three](https://github.com/AkshayTallikar/codebase-red-team/milestone/3)) of issues, and wrote an interface spec for each one. Smaller coding agents implemented each issue on its own branch. The planner reviewed the code, corrected what the specs got wrong (one held-out exploit, for instance, only works against the naively patched app, so the audit test checks "breaks the seed or the naive fix"; and when the first white-box runs stalled, the planner traced it to a patch loop that re-proposed fixes the gate had rejected, and fixed the loop rather than the scout), opened one pull request per issue, and merged each one only after CI passed on Python 3.11, 3.12 and 3.13. CI needs no API key, because every LLM path is tested against an offline fake.
 
 ## Next
 
 - Run the benchmark with Claude on both sides and compare it with the offline playbook
-- White-box mode where the attacker reads the source as well as the routes
+- Point the scout at a real open-source FastAPI app and report what it finds
 - Multi-step attack chains (sign in, escalate, then read)
 - Run several attacker strategies as a population and keep the ones that land

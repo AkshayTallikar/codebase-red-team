@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -27,8 +28,13 @@ FUNCTIONAL_CHECKS: tuple[FunctionalCheck, ...] = NOTES.functional_checks
 
 
 def _describe(probe: Probe) -> str:
-    """Short human-readable form of a probe for ledger reasons."""
-    return f"{probe.method} {probe.path} {dict(probe.params)}"
+    """Short human-readable form of a probe for ledger reasons, with body and headers if set."""
+    text = f"{probe.method} {probe.path} {dict(probe.params)}"
+    if probe.json_body is not None:
+        text += f" body={json.dumps(probe.json_body, sort_keys=True)}"
+    if probe.headers:
+        text += f" headers={json.dumps(probe.headers, sort_keys=True)}"
+    return text
 
 
 def _rejected(*reasons: str) -> GateResult:

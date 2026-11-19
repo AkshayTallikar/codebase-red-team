@@ -117,3 +117,19 @@ def test_exploit_that_still_works_is_reported():
     result = VerificationGate().verify(seed, noop, finding, [])
     assert not result.accepted
     assert "exploit still works" in result.reasons
+
+
+def test_rejection_reasons_show_json_body_and_headers() -> None:
+    from redteam.gate import _describe
+
+    probe = Probe(
+        "PATCH",
+        "/me",
+        "PATCH /me",
+        vuln_class="mass_assignment",
+        headers={"X-Forwarded-User": "admin"},
+        json_body={"role": "admin"},
+    )
+    assert _describe(probe) == (
+        'PATCH /me {} body={"role": "admin"} headers={"X-Forwarded-User": "admin"}'
+    )

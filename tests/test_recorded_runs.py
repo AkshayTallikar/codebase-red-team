@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from redteam.agents.attacker import PlaybookAttacker
+from redteam.agents.attacker import PlaybookAttacker, ScoutAttacker
 from redteam.agents.patcher import ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
 from redteam.audit import audit
@@ -26,7 +26,9 @@ from redteam.timeline import build_timeline, render_svg
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 CANARY_PATTERN = re.compile(rb"CANARY-[0-9a-f]{16}")
-RUNS = [("notes-run", NOTES), ("billing-run", BILLING)]
+RUNS = [("notes-run", NOTES), ("billing-run", BILLING), ("billing-whitebox-run", BILLING)]
+# The attacker each recording was made with, as the CLI names it.
+ATTACKER = {"notes-run": "playbook", "billing-run": "playbook", "billing-whitebox-run": "white-box"}
 
 
 def _regressions(run: str) -> dict[str, list[Probe]]:
@@ -36,16 +38,19 @@ def _regressions(run: str) -> dict[str, list[Probe]]:
 
 @pytest.fixture(scope="module")
 def fresh_runs() -> dict[str, ArenaResult]:
-    """One offline Arena run per target, shared by every test in this module."""
-    return {
-        target.name: Arena(
-            PlaybookAttacker(target),
+    """One offline Arena run per recording, shared by every test in this module."""
+    runs = {}
+    for run, target in RUNS:
+        attacker = (
+            ScoutAttacker(target) if ATTACKER[run] == "white-box" else PlaybookAttacker(target)
+        )
+        runs[run] = Arena(
+            attacker,
             ReferencePatcher(target),
             target=target,
             config=ArenaConfig(rounds=DEFAULT_ROUNDS, budget=DEFAULT_BUDGET),
         ).run()
-        for target in (NOTES, BILLING)
-    }
+    return runs
 
 
 @pytest.fixture(scope="module")
@@ -111,17 +116,17 @@ def test_final_app_matches_a_fresh_offline_run(
     run: str, target: Target, fresh_runs: dict[str, ArenaResult]
 ) -> None:
     recorded = (EXAMPLES / run / "final_app.py").read_text(encoding="utf-8")
-    assert recorded == fresh_runs[target.name].final_source
+    assert recorded == fresh_runs[run].final_source
 
 
 @pytest.mark.parametrize(("run", "target"), RUNS, ids=[name for name, _ in RUNS])
 def test_timeline_matches_a_fresh_offline_run(
     run: str, target: Target, fresh_runs: dict[str, ArenaResult]
 ) -> None:
-    # The CLI names the attacker "playbook" and the patcher "reference" for offline runs.
-    title = f"Arms race on {target.name}: playbook vs reference"
+    # Offline runs name the patcher "reference"; the attacker name depends on the recording.
+    title = f"Arms race on {target.name}: {ATTACKER[run]} vs reference"
     recorded = (EXAMPLES / run / "timeline.svg").read_text(encoding="utf-8")
-    assert recorded == render_svg(build_timeline(fresh_runs[target.name]), title=title)
+    assert recorded == render_svg(build_timeline(fresh_runs[run]), title=title)
 
 
 def test_bench_scorecard_matches_its_rows(bench_rows: list[dict]) -> None:
@@ -151,3 +156,9 @@ def test_no_recorded_file_leaks_a_canary() -> None:
     assert files
     leaks = [str(path) for path in files if CANARY_PATTERN.search(path.read_bytes())]
     assert leaks == []
+
+
+def test_whitebox_recording_shows_the_gate_rejecting_naive_fixes() -> None:
+    text = (EXAMPLES / "billing-whitebox-run" / "ARMS_RACE.md").read_text(encoding="utf-8")
+    assert "Attacker: white-box" in text
+    assert "attempt 0, rejected" in text
