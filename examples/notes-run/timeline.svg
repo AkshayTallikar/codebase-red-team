@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="719" height="252" viewBox="0 0 719 252" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title id="title">Arms race on notes: playbook vs reference</title>
+<desc id="desc">4 weaknesses over 3 rounds; 2 were bypassed after a fix; all closed; audit clean.</desc>
+<rect x="0" y="0" width="719" height="252" fill="#ffffff"/>
+<text x="267" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 1</text>
+<text x="361" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 2</text>
+<text x="455" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 3</text>
+<text x="549" y="32" font-size="12" fill="#374151" text-anchor="middle">Audit</text>
+<text x="16" y="65" font-size="13" fill="#111827">crash:GET /notes</text>
+<rect x="223" y="44" width="88" height="32" rx="4" fill="#dbeafe"/><text x="267" y="64" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="317" y="44" width="88" height="32" rx="4" fill="#dcfce7"/><text x="361" y="64" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="411" y="44" width="88" height="32" rx="4" fill="#dcfce7"/><text x="455" y="64" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="505" y="44" width="88" height="32" rx="4" fill="#dcfce7"/><text x="549" y="64" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="103" font-size="13" fill="#111827">idor:GET /notes/{note_id}</text>
+<rect x="223" y="82" width="88" height="32" rx="4" fill="#dbeafe"/><text x="267" y="102" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="317" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="361" y="102" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="411" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="455" y="102" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="505" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="549" y="102" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="141" font-size="13" fill="#111827">path_traversal:GET /files</text>
+<rect x="223" y="120" width="88" height="32" rx="4" fill="#dbeafe"/><text x="267" y="140" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="317" y="120" width="88" height="32" rx="4" fill="#ffedd5"/><text x="361" y="140" font-size="12" fill="#9a3412" text-anchor="middle">bypassed</text>
+<rect x="411" y="120" width="88" height="32" rx="4" fill="#dcfce7"/><text x="455" y="140" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="505" y="120" width="88" height="32" rx="4" fill="#dcfce7"/><text x="549" y="140" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="179" font-size="13" fill="#111827">sqli:GET /notes/search</text>
+<rect x="223" y="158" width="88" height="32" rx="4" fill="#dbeafe"/><text x="267" y="178" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="317" y="158" width="88" height="32" rx="4" fill="#ffedd5"/><text x="361" y="178" font-size="12" fill="#9a3412" text-anchor="middle">bypassed</text>
+<rect x="411" y="158" width="88" height="32" rx="4" fill="#dcfce7"/><text x="455" y="178" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="505" y="158" width="88" height="32" rx="4" fill="#dcfce7"/><text x="549" y="178" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<rect x="223" y="222" width="14" height="14" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"/>
+<text x="243" y="234" font-size="12" fill="#374151">found</text>
+<rect x="343" y="222" width="14" height="14" rx="3" fill="#fee2e2" stroke="#991b1b" stroke-width="1"/>
+<text x="363" y="234" font-size="12" fill="#374151">open</text>
+<rect x="463" y="222" width="14" height="14" rx="3" fill="#ffedd5" stroke="#9a3412" stroke-width="1"/>
+<text x="483" y="234" font-size="12" fill="#374151">bypassed</text>
+<rect x="583" y="222" width="14" height="14" rx="3" fill="#dcfce7" stroke="#166534" stroke-width="1"/>
+<text x="603" y="234" font-size="12" fill="#374151">closed</text>
+</svg>

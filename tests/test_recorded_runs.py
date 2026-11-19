@@ -22,6 +22,7 @@ from redteam.models import Probe
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
 from redteam.targets import BILLING, NOTES, Target
+from redteam.timeline import build_timeline, render_svg
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 CANARY_PATTERN = re.compile(rb"CANARY-[0-9a-f]{16}")
@@ -111,6 +112,16 @@ def test_final_app_matches_a_fresh_offline_run(
 ) -> None:
     recorded = (EXAMPLES / run / "final_app.py").read_text(encoding="utf-8")
     assert recorded == fresh_runs[target.name].final_source
+
+
+@pytest.mark.parametrize(("run", "target"), RUNS, ids=[name for name, _ in RUNS])
+def test_timeline_matches_a_fresh_offline_run(
+    run: str, target: Target, fresh_runs: dict[str, ArenaResult]
+) -> None:
+    # The CLI names the attacker "playbook" and the patcher "reference" for offline runs.
+    title = f"Arms race on {target.name}: playbook vs reference"
+    recorded = (EXAMPLES / run / "timeline.svg").read_text(encoding="utf-8")
+    assert recorded == render_svg(build_timeline(fresh_runs[target.name]), title=title)
 
 
 def test_bench_scorecard_matches_its_rows(bench_rows: list[dict]) -> None:

@@ -17,6 +17,7 @@ from redteam.models import Finding, Patch, Probe
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
 from redteam.targets import Target, default_target
+from redteam.timeline import write_timeline
 
 STOP_CLEAN = "clean_round"
 STOP_EXHAUSTED = "attacker_exhausted"
@@ -330,6 +331,11 @@ def _write_outputs(
 
     report = render_report(result, attacker_name, patcher_name, target_name=target_name)
     (out_dir / "ARMS_RACE.md").write_text(report, encoding="utf-8")
+    write_timeline(
+        out_dir,
+        result,
+        title=f"Arms race on {target_name}: {attacker_name} vs {patcher_name}",
+    )
 
 
 def _write_json(path: Path, data: Any) -> None:
@@ -409,6 +415,8 @@ def render_report(
         f"Target: {target_name} · "
         f"Attacker: {attacker_name} · Patcher: {patcher_name} · Rounds: {len(result.rounds)} · "
         f"Stopped: {result.stop_reason} · Result: {verdict}, {len(result.open_findings)} open",
+        "",
+        "![Arms-race timeline](timeline.svg)",
         "",
         "## Scoreboard",
         "",
