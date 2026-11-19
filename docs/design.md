@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: milestone 1 shipped; milestone 2 accepted (section 7)
+Status: milestones 1 and 2 shipped (milestone 2 is section 7)
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -246,6 +246,10 @@ allowlist, dropping header trust, and an owner check.
 `audit(source, target)` replays the target's `audit_probes`, each in a fresh
 copy of the app, and reports which classes are still exploitable. The loop never
 sees these probes, so the audit is an independent measure of residual risk.
+Each audit probe must break either the seed app or the app after the naive
+fixes, and every one must be blocked once the real fixes land. (Some exploits
+only exist against a bad fix: `....//secrets.txt` is a harmless directory name
+on the seed, and becomes `../secrets.txt` after the naive strip.)
 
 `redteam bench` runs every target under four strategies and audits each result:
 

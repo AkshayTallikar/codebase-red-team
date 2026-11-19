@@ -440,7 +440,7 @@ def render_report(
         if summary.findings:
             lines += ["", "| Finding | Kind | Probe |", "|---|---|---|"]
             for finding in summary.findings:
-                probe = _cell(f"`{_probe_text(finding.probe)}`")
+                probe = _cell(f"`{_probe_detail(finding.probe)}`")
                 lines.append(f"| `{_cell(finding.key)}` | {finding.kind} | {probe} |")
 
         if summary.outcomes:

@@ -5,8 +5,17 @@
     "path_traversal:GET /files": 2,
     "sqli:GET /notes/search": 2
   },
+  "audit": {
+    "clean": true,
+    "exposed_classes": [],
+    "landed": {},
+    "landed_count": 0,
+    "target": "notes",
+    "total": 11
+  },
   "hardened": true,
   "open_keys": [],
   "rounds": 3,
-  "stop_reason": "clean_round"
+  "stop_reason": "clean_round",
+  "target": "notes"
 }
