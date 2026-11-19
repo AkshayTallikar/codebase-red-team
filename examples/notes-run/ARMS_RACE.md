@@ -2,6 +2,8 @@
 
 Target: notes · Attacker: playbook · Patcher: reference · Rounds: 3 · Stopped: clean_round · Result: hardened, 0 open
 
+![Arms-race timeline](timeline.svg)
+
 ## Scoreboard
 
 | Weakness | Patches accepted | Bypassed after a fix | Status |
