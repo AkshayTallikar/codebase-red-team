@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: milestones 1 and 2 shipped (milestone 2 is section 7)
+Status: milestones 1 and 2 shipped (section 7); milestone 3 in progress (section 8)
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -183,7 +183,7 @@ class LLMBackend(Protocol):
 
 ## 6. Later ideas
 
-- Let the attacker read the source (white-box mode) as well as the API.
+- Let the attacker read the source (white-box mode) as well as the API (now section 8).
 - Run several attacker strategies as a population and keep the ones that land.
 - Multi-step attack chains (log in, escalate, then read).
 
@@ -279,3 +279,54 @@ fake, so CI needs no key.
 3. Held-out audit, `redteam bench`, and `SCORECARD.md`.
 4. Target-aware LLM attacker and patcher.
 5. README, design and recorded runs for both targets plus the scorecard.
+
+## 8. Milestone 3: white-box attacks
+
+Milestones 1 and 2 attack from the outside: the playbook knows each target's
+seed exploits because a human wrote them down. That does not scale to a new
+codebase. Milestone 3 lets the attacker read the source, as a real reviewer
+would, and derive its first exploits from what it reads.
+
+### 8.1 Source scout
+
+`redteam.scout` parses a target's source with Python's `ast` module (no code is
+executed) and returns hypotheses: a route, a vulnerability class, the line and
+the code that made it suspicious, and concrete probes that would confirm it.
+
+| Class | What the scout looks for |
+|---|---|
+| sqli | a query string built by f-string, `%` or `+` reaching `execute` |
+| path_traversal | a request parameter joined into a path that reaches `open` or `read_text` without a resolved-path containment check |
+| idor | a route with a path id that fetches a row without comparing it to the current user |
+| crash | a request parameter used as a divisor or converted with `int()` without a guard |
+| mass_assignment | a loop over a request body that writes a privileged field such as `role` |
+| ssrf | a URL parameter passed to a fetch call without a parsed-host allowlist |
+| auth_bypass | identity taken from a request header other than the auth token |
+
+A hypothesis is a lead, not a finding: only the oracle decides what landed. The
+scout must find every seeded weakness in both targets, keep flagging the naive
+fixes (a keyword blocklist is still an f-string query), and stay quiet on the
+app after the real fixes. `redteam scout --target notes` prints the hypotheses.
+
+### 8.2 White-box attacker
+
+`ScoutAttacker` starts from the scout's probes instead of hand-written seeds.
+Before each round the arena hands it the current source, so it re-reads the app
+after every patch: a naive fix that leaves the sink in place stays on its list,
+and mutation of blocked probes works as in the adaptive playbook. The benchmark
+gains a white-box row per patcher, and two columns: probes sent (attack cost)
+and scout leads left on the final app (static residual risk next to the audit).
+
+### 8.3 Arms-race timeline
+
+Every run also writes `timeline.svg`: one row per weakness, one column per
+round, each cell coloured by what happened (found, patched, bypassed, closed).
+It is plain SVG built from the ledger, deterministic so recorded runs can be
+checked byte for byte, and embedded in the README.
+
+### 8.4 Milestone 3 scope
+
+1. Source scout and `redteam scout`.
+2. White-box attacker, the arena source hook, and the benchmark rows.
+3. Arms-race timeline SVG for every run.
+4. README, design and recorded runs refreshed, plus a short guide to adding a target.
