@@ -23,8 +23,8 @@ def test_get_target_returns_the_notes_target() -> None:
 
 
 def test_unknown_target_raises_key_error_naming_known_targets() -> None:
-    with pytest.raises(KeyError, match="notes"):
-        get_target("billing")
+    with pytest.raises(KeyError, match="billing"):
+        get_target("nosuchtarget")
 
 
 def test_notes_functional_checks_pass_on_the_seed_app() -> None:

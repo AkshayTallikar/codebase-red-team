@@ -232,7 +232,7 @@ internal metadata endpoint.
 | Class | Endpoint | Weakness | Naive first fix | Bypass |
 |---|---|---|---|---|
 | `mass_assignment` | `PATCH /me` | copies any known field from the JSON body, keys normalised | reject the key `role` | `Role`, `ROLE`, ` role` |
-| `ssrf` | `GET /invoices/import?url=` | fetches any URL through an in-memory fake web | block the text `metadata.internal` | upper case host, trailing dot, raw IP, decimal IP, `localhost` |
+| `ssrf` | `GET /invoices/import?url=` | fetches any URL through an in-memory fake web | block the text `metadata.internal` | upper case host, raw IP, decimal IP, `localhost` |
 | `auth_bypass` | `GET /admin/settings` | trusts an `X-Forwarded-User` header | reject the value `admin` | `Admin`, ` admin` |
 | `idor` | `GET /invoices/{invoice_id}` | no ownership check | (real fix only) | |
 
