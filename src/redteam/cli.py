@@ -8,7 +8,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from redteam.agents.attacker import Attacker, LLMAttacker, PlaybookAttacker
+from redteam.agents.attacker import Attacker, LLMAttacker, PlaybookAttacker, ScoutAttacker
 from redteam.agents.patcher import LLMPatcher, Patcher, ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
 from redteam.bench import run_bench, write_bench
@@ -21,6 +21,8 @@ DEFAULT_BUDGET = 40
 EXIT_HARDENED = 0
 EXIT_OPEN = 1
 EXIT_BACKEND_ERROR = 2
+ATTACKER_CHOICES = ("playbook", "one-shot", "white-box")
+DEFAULT_ATTACKER = "playbook"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -38,6 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="offline uses the deterministic playbook (default)",
     )
     run.add_argument("--model", default=None, help="model id for the anthropic backend")
+    run.add_argument(
+        "--attacker",
+        choices=ATTACKER_CHOICES,
+        default=DEFAULT_ATTACKER,
+        help="offline attacker: playbook (adaptive), one-shot (seeds only) or white-box "
+        "(re-reads the source and attacks the scout's leads); ignored with --backend anthropic",
+    )
     run.add_argument(
         "--target",
         choices=sorted(TARGETS),
@@ -124,10 +133,22 @@ def _scout(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_agents(backend_name: str, model: str | None, target: Target) -> tuple[Attacker, Patcher]:
+def _offline_attacker(name: str, target: Target) -> Attacker:
+    """The offline attacker for a `--attacker` choice."""
+    if name == "white-box":
+        return ScoutAttacker(target)
+    return PlaybookAttacker(target, adaptive=name == "playbook")
+
+
+def _build_agents(
+    backend_name: str,
+    model: str | None,
+    target: Target,
+    attacker_name: str = DEFAULT_ATTACKER,
+) -> tuple[Attacker, Patcher]:
     """Return the attacker and patcher for the chosen backend and target."""
     if backend_name == "offline":
-        return PlaybookAttacker(target), ReferencePatcher(target)
+        return _offline_attacker(attacker_name, target), ReferencePatcher(target)
     backend = make_backend(backend_name, model)
     if backend is None:
         raise LLMError(f"no backend available for {backend_name!r}")
@@ -156,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         return _scout(args)
     target = get_target(args.target)
     try:
-        attacker, patcher = _build_agents(args.backend, args.model, target)
+        attacker, patcher = _build_agents(args.backend, args.model, target, args.attacker)
     except LLMError as exc:
         print(f"redteam: {exc}", file=sys.stderr)
         return EXIT_BACKEND_ERROR

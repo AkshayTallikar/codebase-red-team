@@ -127,6 +127,8 @@ class _Campaign:
         self.closed: set[str] = set()
         self.reopened: set[str] = set()
         self.attempts: Counter[str] = Counter()
+        # Every proposal for a key, accepted or rejected: a rejected fix escalates the next one.
+        self.proposals: Counter[str] = Counter()
         self.open_findings: dict[str, Finding] = {}
 
     def play(self) -> ArenaResult:
@@ -145,6 +147,9 @@ class _Campaign:
         for number in range(1, config.rounds + 1):
             self.ledger.round = number
             self.ledger.log("round_started", number=number)
+            observe = getattr(self.arena.attacker, "observe_source", None)
+            if callable(observe):
+                observe(self._source())
             probes = self.arena.attacker.plan(self.sandbox.routes(), self.history, config.budget)
             if not probes:
                 rounds.append(RoundSummary(number, 0, [], []))
@@ -225,9 +230,11 @@ class _Campaign:
     def _patch(self, finding: Finding) -> PatchOutcome:
         """Ask the patcher for a fix and let the gate decide whether it stays."""
         key = finding.key
-        attempt = self.attempts[key]
+        attempt = self.proposals[key]
         source = self._source()
         patch = self.arena.patcher.propose(finding, source, attempt)
+        if patch is not None:
+            self.proposals[key] += 1
         if patch is None:
             self.open_findings[key] = finding
             self.ledger.log("patch_unavailable", key=key, attempt=attempt)

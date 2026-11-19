@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from redteam.agents.attacker import PlaybookAttacker
+from redteam.agents.attacker import PlaybookAttacker, ScoutAttacker
 from redteam.agents.patcher import ReferencePatcher
 from redteam.arena import STOP_CLEAN, Arena
 from redteam.bench import BenchRow, render_scorecard, run_bench
@@ -67,15 +67,43 @@ def test_naive_first_sqli_fix_is_the_keyword_block() -> None:
     assert patch.author == "reference"
 
 
-def test_bench_covers_both_targets_under_four_strategies(rows: list[BenchRow]) -> None:
-    assert len(rows) == 8
+def test_bench_covers_both_targets_under_six_strategies(rows: list[BenchRow]) -> None:
+    assert len(rows) == 12
     assert {row.target for row in rows} == {"notes", "billing"}
     combos = {(row.attacker, row.patcher) for row in rows}
     assert combos == {
         (attacker, patcher)
-        for attacker in ("adaptive", "one-shot")
+        for attacker in ("adaptive", "one-shot", "white-box")
         for patcher in ("naive-first", "correct-first")
     }
+
+
+def test_bench_rows_are_ordered_per_target_then_attacker_then_patcher(
+    rows: list[BenchRow],
+) -> None:
+    order = [(row.target, row.attacker, row.patcher) for row in rows]
+    expected = [
+        (target, attacker, patcher)
+        for target in ("notes", "billing")
+        for attacker in ("adaptive", "one-shot", "white-box")
+        for patcher in ("naive-first", "correct-first")
+    ]
+    assert order == expected
+
+
+def test_white_box_rows_use_the_scout_and_send_probes(rows: list[BenchRow]) -> None:
+    white = [row for row in rows if row.attacker == "white-box"]
+    assert len(white) == 4
+    assert all(row.probes_sent > 0 for row in white)
+    assert all(row.exploits_found > 0 for row in white)
+    assert ScoutAttacker(NOTES).name == "white-box"
+
+
+def test_white_box_correct_first_runs_end_hardened_with_no_leads(rows: list[BenchRow]) -> None:
+    correct = [r for r in rows if r.attacker == "white-box" and r.patcher == "correct-first"]
+    assert len(correct) == 2
+    assert all(row.loop_hardened and row.audit_landed == 0 for row in correct)
+    assert all(row.scout_leads_left == 0 for row in correct)
 
 
 def test_adaptive_runs_are_hardened_and_pass_the_audit(rows: list[BenchRow]) -> None:
@@ -101,18 +129,23 @@ def test_false_confidence_appears_only_for_one_shot_naive_first(rows: list[Bench
 
 def test_correct_first_runs_catch_no_bypass(rows: list[BenchRow]) -> None:
     correct = [row for row in rows if row.patcher == "correct-first"]
-    assert len(correct) == 4
+    assert len(correct) == 6
     assert all(row.bypasses_caught == 0 for row in correct)
 
 
 def test_scorecard_has_the_table_header_and_headline(rows: list[BenchRow]) -> None:
     text = render_scorecard(rows)
     assert (
-        "| Target | Attacker | Patcher | Rounds | Exploits found | Bypasses caught | Patches "
-        "| Lines changed | Loop says | Audit | False confidence |"
+        "| Target | Attacker | Patcher | Rounds | Probes sent | Exploits found "
+        "| Bypasses caught | Patches | Lines changed | Loop says | Audit | Scout leads left "
+        "| False confidence |"
     ) in text
-    assert "**Headline:** 2 of 8 runs reported a hardened app" in text
+    assert "**Headline:** 2 of 12 runs reported a hardened app" in text
     assert "## Exposure left behind" in text
+    assert "Every adaptive run that reported hardened passed the audit." in text
+    assert "starting from no hand-written exploits." in text
+    assert '- "Probes sent" is the attack cost' in text
+    assert '- "Scout leads left" counts the static leads' in text
 
 
 def test_headline_says_so_when_no_run_has_false_confidence() -> None:
@@ -141,5 +174,6 @@ def test_bench_command_writes_the_scorecard_and_json(tmp_path) -> None:
     scorecard = (tmp_path / "SCORECARD.md").read_text(encoding="utf-8")
     assert "| notes | adaptive | naive-first |" in scorecard
     data = json.loads((tmp_path / "scorecard.json").read_text(encoding="utf-8"))
-    assert len(data) == 8
+    assert len(data) == 12
     assert all("false_confidence" in entry for entry in data)
+    assert all("probes_sent" in entry and "scout_leads_left" in entry for entry in data)

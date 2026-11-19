@@ -11,7 +11,9 @@
     "loop_hardened": true,
     "patcher": "naive-first",
     "patches_accepted": 6,
+    "probes_sent": 59,
     "rounds": 3,
+    "scout_leads_left": 0,
     "target": "notes"
   },
   {
@@ -26,7 +28,9 @@
     "loop_hardened": true,
     "patcher": "correct-first",
     "patches_accepted": 4,
+    "probes_sent": 31,
     "rounds": 2,
+    "scout_leads_left": 0,
     "target": "notes"
   },
   {
@@ -44,7 +48,9 @@
     "loop_hardened": true,
     "patcher": "naive-first",
     "patches_accepted": 4,
+    "probes_sent": 18,
     "rounds": 2,
+    "scout_leads_left": 2,
     "target": "notes"
   },
   {
@@ -59,7 +65,43 @@
     "loop_hardened": true,
     "patcher": "correct-first",
     "patches_accepted": 4,
+    "probes_sent": 18,
     "rounds": 2,
+    "scout_leads_left": 0,
+    "target": "notes"
+  },
+  {
+    "attacker": "white-box",
+    "audit_landed": 0,
+    "audit_total": 11,
+    "bypasses_caught": 1,
+    "exploits_found": 4,
+    "exposed_classes": [],
+    "false_confidence": false,
+    "lines_changed": 24,
+    "loop_hardened": true,
+    "patcher": "naive-first",
+    "patches_accepted": 5,
+    "probes_sent": 95,
+    "rounds": 3,
+    "scout_leads_left": 0,
+    "target": "notes"
+  },
+  {
+    "attacker": "white-box",
+    "audit_landed": 0,
+    "audit_total": 11,
+    "bypasses_caught": 0,
+    "exploits_found": 4,
+    "exposed_classes": [],
+    "false_confidence": false,
+    "lines_changed": 24,
+    "loop_hardened": true,
+    "patcher": "correct-first",
+    "patches_accepted": 4,
+    "probes_sent": 55,
+    "rounds": 2,
+    "scout_leads_left": 0,
     "target": "notes"
   },
   {
@@ -74,7 +116,9 @@
     "loop_hardened": true,
     "patcher": "naive-first",
     "patches_accepted": 7,
+    "probes_sent": 45,
     "rounds": 3,
+    "scout_leads_left": 0,
     "target": "billing"
   },
   {
@@ -89,7 +133,9 @@
     "loop_hardened": true,
     "patcher": "correct-first",
     "patches_accepted": 4,
+    "probes_sent": 22,
     "rounds": 2,
+    "scout_leads_left": 0,
     "target": "billing"
   },
   {
@@ -108,7 +154,9 @@
     "loop_hardened": true,
     "patcher": "naive-first",
     "patches_accepted": 4,
+    "probes_sent": 14,
     "rounds": 2,
+    "scout_leads_left": 3,
     "target": "billing"
   },
   {
@@ -123,7 +171,43 @@
     "loop_hardened": true,
     "patcher": "correct-first",
     "patches_accepted": 4,
+    "probes_sent": 14,
     "rounds": 2,
+    "scout_leads_left": 0,
+    "target": "billing"
+  },
+  {
+    "attacker": "white-box",
+    "audit_landed": 0,
+    "audit_total": 11,
+    "bypasses_caught": 1,
+    "exploits_found": 4,
+    "exposed_classes": [],
+    "false_confidence": false,
+    "lines_changed": 16,
+    "loop_hardened": true,
+    "patcher": "naive-first",
+    "patches_accepted": 5,
+    "probes_sent": 77,
+    "rounds": 3,
+    "scout_leads_left": 0,
+    "target": "billing"
+  },
+  {
+    "attacker": "white-box",
+    "audit_landed": 0,
+    "audit_total": 11,
+    "bypasses_caught": 0,
+    "exploits_found": 4,
+    "exposed_classes": [],
+    "false_confidence": false,
+    "lines_changed": 16,
+    "loop_hardened": true,
+    "patcher": "correct-first",
+    "patches_accepted": 4,
+    "probes_sent": 44,
+    "rounds": 2,
+    "scout_leads_left": 0,
     "target": "billing"
   }
 ]

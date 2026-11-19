@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from redteam.llm.base import LLMBackend, LLMError
 from redteam.models import Probe
 from redteam.sandbox import ProbeRejected, validate_probe
+from redteam.scout import scout_target
 from redteam.targets import NOTES, Target, default_target
 
 
@@ -296,6 +297,39 @@ class PlaybookAttacker:
             for probe in history.blocked:
                 if probe.note.startswith("mutation of"):
                     batch.extend(mutate(probe))
+        return finalize(batch, routes, history, budget)
+
+
+class ScoutAttacker:
+    """White-box: re-reads the current source each round and attacks the scout's leads.
+
+    It never reads the target's hand-written seed, audit or fix data: every probe comes from
+    the source the arena last showed it.
+    """
+
+    name = "white-box"
+
+    def __init__(self, target: Target | None = None) -> None:
+        self.target = target if target is not None else default_target()
+        self._source: str | None = None
+
+    def observe_source(self, source: str) -> None:
+        """Remember the source the sandbox is running, before the next plan."""
+        self._source = source
+
+    def plan(self, routes: list[str], history: AttackHistory, budget: int) -> list[Probe]:
+        """Return the scout's probes, then mutations of what landed or was blocked by the scout."""
+        source = self._source if self._source is not None else self.target.load_source()
+        try:
+            leads = scout_target(self.target, source)
+        except SyntaxError:
+            leads = []
+        batch = [probe for lead in leads for probe in lead.probes]
+        for probe in history.landed:
+            batch.extend(mutate(probe))
+        for probe in history.blocked:
+            if probe.note.startswith(("scout:", "mutation of")):
+                batch.extend(mutate(probe))
         return finalize(batch, routes, history, budget)
 
 
