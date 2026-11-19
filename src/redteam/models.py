@@ -6,8 +6,25 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-VulnClass = Literal["sqli", "idor", "path_traversal", "crash", "unknown"]
-VULN_CLASSES: tuple[str, ...] = ("sqli", "idor", "path_traversal", "crash")
+VulnClass = Literal[
+    "sqli",
+    "idor",
+    "path_traversal",
+    "crash",
+    "mass_assignment",
+    "ssrf",
+    "auth_bypass",
+    "unknown",
+]
+VULN_CLASSES: tuple[str, ...] = (
+    "sqli",
+    "idor",
+    "path_traversal",
+    "crash",
+    "mass_assignment",
+    "ssrf",
+    "auth_bypass",
+)
 
 
 @dataclass(frozen=True)

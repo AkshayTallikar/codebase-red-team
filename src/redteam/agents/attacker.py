@@ -7,6 +7,7 @@ sandbox boundary, the route list, the attack history and the budget.
 from __future__ import annotations
 
 import json
+import urllib.parse
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
@@ -143,6 +144,84 @@ def _mutate_idor(probe: Probe) -> list[Probe]:
     ]
 
 
+def _mutate_mass_assignment(probe: Probe) -> list[Probe]:
+    """Respell each body key (Role, ROLE, leading and trailing space) and keep its value."""
+    if not probe.json_body:
+        return []
+    mutations: list[Probe] = []
+    for key in probe.json_body:
+        spellings = [
+            ("capitalised key", key.capitalize()),
+            ("upper-case key", key.upper()),
+            ("leading space", " " + key),
+            ("trailing space", key + " "),
+        ]
+        for operator, spelling in spellings:
+            if spelling == key:
+                continue
+            body = {
+                (spelling if name == key else name): value
+                for name, value in probe.json_body.items()
+            }
+            mutations.append(
+                replace(
+                    probe,
+                    json_body=body,
+                    note=f"mutation of {key!r}: {operator}",
+                )
+            )
+    return mutations
+
+
+def _with_host(url: str, host: str) -> str:
+    """Return `url` with its host replaced, keeping the scheme, path and query."""
+    return urllib.parse.urlunsplit(urllib.parse.urlsplit(url)._replace(netloc=host))
+
+
+def _mutate_ssrf(probe: Probe) -> list[Probe]:
+    """Respell or replace the host of the import URL: case, dot, IP forms and localhost."""
+    original = probe.params.get("url")
+    if original is None:
+        return []
+    host = urllib.parse.urlsplit(original).hostname
+    if not host:
+        return []
+    candidates = [
+        ("upper-case host", host.upper()),
+        ("trailing dot", host + "."),
+        ("raw IP", "169.254.169.254"),
+        ("decimal IP", "2852039166"),
+        ("localhost", "localhost"),
+    ]
+    return _param_mutations(
+        probe,
+        "url",
+        [(operator, _with_host(original, value)) for operator, value in candidates],
+    )
+
+
+def _mutate_auth_bypass(probe: Probe) -> list[Probe]:
+    """Respell each header value: capitalised, upper-case and with a leading space."""
+    mutations: list[Probe] = []
+    for name, value in probe.headers.items():
+        candidates = [
+            ("capitalised value", value.capitalize()),
+            ("upper-case value", value.upper()),
+            ("leading space", " " + value),
+        ]
+        for operator, spelling in candidates:
+            if spelling == value:
+                continue
+            mutations.append(
+                replace(
+                    probe,
+                    headers={**probe.headers, name: spelling},
+                    note=f"mutation of {value!r}: {operator}",
+                )
+            )
+    return mutations
+
+
 def mutate(probe: Probe) -> list[Probe]:
     """Return deterministic variants of a probe that keep its endpoint and class."""
     if probe.vuln_class == "sqli":
@@ -171,6 +250,12 @@ def mutate(probe: Probe) -> list[Probe]:
             "limit",
             [(f"limit={value!r}", value) for value in _CRASH_VALUES],
         )
+    if probe.vuln_class == "mass_assignment":
+        return _mutate_mass_assignment(probe)
+    if probe.vuln_class == "ssrf":
+        return _mutate_ssrf(probe)
+    if probe.vuln_class == "auth_bypass":
+        return _mutate_auth_bypass(probe)
     return []
 
 
