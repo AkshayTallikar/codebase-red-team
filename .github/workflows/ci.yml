@@ -29,3 +29,15 @@ jobs:
         run: ruff format --check .
       - name: Test
         run: pytest
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install detect-secrets
+        run: pip install detect-secrets==1.5.0
+      - name: Scan tracked files against the baseline
+        run: git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
