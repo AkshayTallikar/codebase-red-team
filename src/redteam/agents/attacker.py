@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from redteam.llm.base import LLMBackend, LLMError
-from redteam.models import VULN_CLASSES, Probe
+from redteam.models import Probe
 from redteam.sandbox import ProbeRejected, validate_probe
 from redteam.targets import NOTES, Target, default_target
 
@@ -308,62 +308,93 @@ SYSTEM_PROMPT = (
     "variants of that payload rather than repeating it."
 )
 
-PLAN_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["probes"],
-    "properties": {
-        "probes": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["method", "path", "endpoint", "vuln_class", "params", "note"],
-                "properties": {
-                    "method": {"type": "string"},
-                    "path": {"type": "string"},
-                    "endpoint": {"type": "string"},
-                    "vuln_class": {"type": "string", "enum": list(VULN_CLASSES)},
-                    "params": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": ["name", "value"],
-                            "properties": {
-                                "name": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                        },
-                    },
-                    "note": {"type": "string"},
-                },
+# Headers the model may never set: the sandbox sends the token itself and rejects a Host.
+_RESERVED_HEADERS = frozenset({"host", "x-token"})
+
+
+def plan_schema(target: Target) -> dict[str, Any]:
+    """Return the JSON schema of one attack plan, with classes limited to the target's."""
+    pair_list: dict[str, Any] = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["name", "value"],
+            "properties": {
+                "name": {"type": "string"},
+                "value": {"type": "string"},
             },
-        }
-    },
-}
+        },
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["probes"],
+        "properties": {
+            "probes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "method",
+                        "path",
+                        "endpoint",
+                        "vuln_class",
+                        "params",
+                        "headers",
+                        "json_body",
+                        "note",
+                    ],
+                    "properties": {
+                        "method": {"type": "string"},
+                        "path": {"type": "string"},
+                        "endpoint": {"type": "string"},
+                        "vuln_class": {"type": "string", "enum": list(target.vuln_classes)},
+                        "params": pair_list,
+                        "headers": pair_list,
+                        # A JSON object written as text, or "" for no body: strict schemas
+                        # cannot express an open object.
+                        "json_body": {"type": "string"},
+                        "note": {"type": "string"},
+                    },
+                },
+            }
+        },
+    }
+
+
+PLAN_SCHEMA: dict[str, Any] = plan_schema(NOTES)
 
 
 def _compact(probe: Probe) -> dict[str, Any]:
-    return {
+    entry: dict[str, Any] = {
         "method": probe.method,
         "path": probe.path,
         "params": probe.params,
         "vuln_class": probe.vuln_class,
     }
+    if probe.headers:
+        entry["headers"] = probe.headers
+    if probe.json_body is not None:
+        entry["json_body"] = probe.json_body
+    return entry
 
 
-def _build_prompt(routes: list[str], history: AttackHistory, budget: int) -> str:
+def _build_prompt(routes: list[str], history: AttackHistory, budget: int, target: Target) -> str:
     landed = [_compact(p) for p in history.landed[-20:]]
     blocked = [_compact(p) for p in history.blocked[-20:]]
     lines = [
+        f"Target: {target.name}, {target.description}.",
+        "",
         "Routes (METHOD /path-template):",
         *(f"- {route}" for route in routes),
         "",
         'Your own token is already sent as the X-Token header for user "mallory". '
-        "Do not add headers or a host.",
-        "Goal: make the app leak the secret canary of another user, or return a 5xx.",
-        f"Vulnerability classes: {', '.join(VULN_CLASSES)}.",
+        "A probe may add headers and a JSON body, but never a Host or X-Token header.",
+        "A JSON body is a JSON object written as a string, or an empty string for none.",
+        "Goal: make the app leak the secret canary (data mallory must not see), or return a 5xx.",
+        f"Vulnerability classes: {', '.join(target.vuln_classes)}.",
         "Probes that landed (produced a finding), oldest first:",
         json.dumps(landed, separators=(",", ":"), sort_keys=True),
         "Probes that were blocked (sent, no finding), oldest first:",
@@ -373,32 +404,58 @@ def _build_prompt(routes: list[str], history: AttackHistory, budget: int) -> str
     return "\n".join(lines)
 
 
-def _probe_from_spec(item: Any) -> Probe | None:
-    """Turn one model-written item into a Probe, or None if it is malformed."""
-    if not isinstance(item, dict):
+def _pairs(raw: Any) -> dict[str, str] | None:
+    """Turn a list of {name, value} objects into a dict, or None if it is malformed."""
+    if not isinstance(raw, list):
         return None
-    text_keys = ("method", "path", "endpoint", "vuln_class", "note")
-    if not all(isinstance(item.get(key), str) for key in text_keys):
-        return None
-    if item["vuln_class"] not in VULN_CLASSES:
-        return None
-    raw_params = item.get("params")
-    if not isinstance(raw_params, list):
-        return None
-    params: dict[str, str] = {}
-    for pair in raw_params:
+    pairs: dict[str, str] = {}
+    for pair in raw:
         if not isinstance(pair, dict):
             return None
         name, value = pair.get("name"), pair.get("value")
         if not isinstance(name, str) or not isinstance(value, str):
             return None
-        params[name] = value
+        pairs[name] = value
+    return pairs
+
+
+def _probe_from_spec(item: Any, target: Target) -> Probe | None:
+    """Turn one model-written item into a Probe, or None if it is malformed or off-target."""
+    if not isinstance(item, dict):
+        return None
+    text_keys = ("method", "path", "endpoint", "vuln_class", "note")
+    if not all(isinstance(item.get(key), str) for key in text_keys):
+        return None
+    if item["vuln_class"] not in target.vuln_classes:
+        return None
+    params = _pairs(item.get("params"))
+    if params is None:
+        return None
+    # Missing headers or body are tolerated as "none", so older responses still parse.
+    headers = _pairs(item.get("headers") or [])
+    if headers is None:
+        return None
+    headers = {k: v for k, v in headers.items() if k.lower() not in _RESERVED_HEADERS}
+    raw_body = item.get("json_body") or ""
+    if not isinstance(raw_body, str):
+        return None
+    json_body: dict[str, Any] | None = None
+    if raw_body.strip():
+        try:
+            parsed = json.loads(raw_body)
+        except ValueError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        json_body = parsed
     return Probe(
         method=item["method"].upper(),
         path=item["path"],
         endpoint=item["endpoint"],
         vuln_class=item["vuln_class"],
         params=params,
+        headers=headers,
+        json_body=json_body,
         note=item["note"],
     )
 
@@ -408,16 +465,24 @@ class LLMAttacker:
 
     name = "llm"
 
-    def __init__(self, backend: LLMBackend, *, fallback: Attacker | None = None) -> None:
+    def __init__(
+        self,
+        backend: LLMBackend,
+        *,
+        fallback: Attacker | None = None,
+        target: Target | None = None,
+    ) -> None:
         self.backend = backend
         self.fallback = fallback
+        self.target = target if target is not None else default_target()
+        self._schema = plan_schema(self.target)
 
     def plan(self, routes: list[str], history: AttackHistory, budget: int) -> list[Probe]:
         """Return validated probes from the model, or the fallback's probes on failure."""
-        prompt = _build_prompt(routes, history, budget)
+        prompt = _build_prompt(routes, history, budget, self.target)
         try:
             response = self.backend.complete_json(
-                system=SYSTEM_PROMPT, prompt=prompt, schema=PLAN_SCHEMA
+                system=SYSTEM_PROMPT, prompt=prompt, schema=self._schema
             )
         except LLMError:
             if self.fallback is not None:
@@ -426,5 +491,7 @@ class LLMAttacker:
         raw = response.get("probes") if isinstance(response, dict) else None
         if not isinstance(raw, list):
             return []
-        probes = [probe for item in raw if (probe := _probe_from_spec(item)) is not None]
+        probes = [
+            probe for item in raw if (probe := _probe_from_spec(item, self.target)) is not None
+        ]
         return finalize(probes, routes, history, budget)

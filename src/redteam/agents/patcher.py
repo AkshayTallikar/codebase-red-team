@@ -28,21 +28,29 @@ PATCH_SCHEMA: dict[str, Any] = {
     },
 }
 
-SYSTEM_PROMPT = """\
-You are a security engineer hardening a deliberately vulnerable sample app (a notes
-service) that is only ever attacked inside a sandbox. Propose a minimal fix for the one
-weakness described in the finding.
+_CLOSING_RULES = (
+    "- Do not rely on keyword blocklists or string stripping, because attackers route "
+    "around them.\n"
+    "- Do not delete endpoints to make a finding go away.\n"
+)
 
-Rules:
-- Output exact text edits. Every "old" must be copied verbatim from the current source
-  and must occur exactly once in it. Every "new" is its replacement.
-- Keep legitimate behaviour working: the user alice must still list, search, read and
-  create her own notes, and read the public readme.
-- Prefer real fixes: parameterised queries, ownership checks, resolved-path containment
-  and input validation. Do not rely on keyword blocklists or string stripping, because
-  attackers route around them.
-- Do not delete endpoints to make a finding go away.
-"""
+
+def system_prompt(target: Target) -> str:
+    """Return the patcher's system prompt for `target`: the rules plus that app's guidance."""
+    return (
+        "You are a security engineer hardening a deliberately vulnerable sample app, "
+        f"{target.description}, which is only ever attacked inside a sandbox. "
+        "Propose a minimal fix for the one weakness described in the finding.\n"
+        "\n"
+        "Rules:\n"
+        '- Output exact text edits. Every "old" must be copied verbatim from the current source\n'
+        '  and must occur exactly once in it. Every "new" is its replacement.\n'
+        f"- {target.patch_guidance}\n"
+        f"{_CLOSING_RULES}"
+    )
+
+
+SYSTEM_PROMPT = system_prompt(NOTES)
 
 
 REFERENCE_CATALOG: dict[str, tuple[FixAttempt, ...]] = NOTES.fix_catalog
@@ -96,15 +104,17 @@ class LLMPatcher:
 
     name = "llm"
 
-    def __init__(self, backend: LLMBackend) -> None:
+    def __init__(self, backend: LLMBackend, *, target: Target | None = None) -> None:
         self._backend = backend
+        self.target = target if target is not None else default_target()
+        self._system = system_prompt(self.target)
 
     def propose(self, finding: Finding, source: str, attempt: int) -> Patch | None:
         """Return the model's patch, or None on refusal, error or malformed output."""
         prompt = _build_prompt(finding, source, attempt)
         try:
             data = self._backend.complete_json(
-                system=SYSTEM_PROMPT, prompt=prompt, schema=PATCH_SCHEMA
+                system=self._system, prompt=prompt, schema=PATCH_SCHEMA
             )
         except LLMError:
             return None
@@ -128,6 +138,7 @@ def _build_prompt(finding: Finding, source: str, attempt: int) -> str:
             f"Kind: {finding.kind}",
             f"Probe: {probe.method} {probe.path}",
             f"Probe params: {json.dumps(probe.params, sort_keys=True)}",
+            f"Probe headers: {json.dumps(probe.headers, sort_keys=True)}",
             f"Probe JSON body: {body}",
             f"Redacted evidence: {finding.evidence}",
             f"Attempt: {attempt} (zero-based count of accepted patches for this key)",
