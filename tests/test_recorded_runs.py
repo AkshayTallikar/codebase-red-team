@@ -134,6 +134,18 @@ def test_bench_scorecard_has_a_headline() -> None:
     assert any(line.startswith("**Headline:**") for line in text.splitlines())
 
 
+def test_bench_scorecard_records_twelve_runs_with_the_new_columns() -> None:
+    recorded = json.loads((EXAMPLES / "bench" / "scorecard.json").read_text(encoding="utf-8"))
+    assert len(recorded) == 12
+    assert {entry["attacker"] for entry in recorded} == {"adaptive", "one-shot", "white-box"}
+    assert all(isinstance(entry["probes_sent"], int) for entry in recorded)
+    assert all(isinstance(entry["scout_leads_left"], int) for entry in recorded)
+    text = (EXAMPLES / "bench" / "SCORECARD.md").read_text(encoding="utf-8")
+    assert "| Probes sent |" in text
+    assert "| Scout leads left |" in text
+    assert "| white-box | naive-first |" in text
+
+
 def test_no_recorded_file_leaks_a_canary() -> None:
     files = [path for path in EXAMPLES.rglob("*") if path.is_file()]
     assert files

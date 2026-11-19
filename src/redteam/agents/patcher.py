@@ -62,7 +62,7 @@ class Patcher(Protocol):
     name: str
 
     def propose(self, finding: Finding, source: str, attempt: int) -> Patch | None:
-        """Return a patch for `finding`; `attempt` counts earlier accepted patches for its key."""
+        """Return a patch for `finding`; `attempt` counts earlier patches proposed for its key."""
         ...
 
 
@@ -128,7 +128,8 @@ def _build_prompt(finding: Finding, source: str, attempt: int) -> str:
     if attempt > 0:
         attempt_note = (
             f"This is attempt {attempt + 1} for this weakness. Earlier patches for it were "
-            "bypassed, so close the whole weakness class, not only the probe below."
+            "bypassed or rejected by the verification gate, so close the whole weakness "
+            "class, not only the probe below."
         )
     else:
         attempt_note = "This is the first patch for this weakness."
@@ -141,7 +142,7 @@ def _build_prompt(finding: Finding, source: str, attempt: int) -> str:
             f"Probe headers: {json.dumps(probe.headers, sort_keys=True)}",
             f"Probe JSON body: {body}",
             f"Redacted evidence: {finding.evidence}",
-            f"Attempt: {attempt} (zero-based count of accepted patches for this key)",
+            f"Attempt: {attempt} (zero-based count of earlier patches proposed for this key)",
             attempt_note,
             "",
             "Current source:",

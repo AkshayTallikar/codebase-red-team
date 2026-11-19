@@ -9,12 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from redteam.agents.attacker import PlaybookAttacker
+from redteam.agents.attacker import PlaybookAttacker, ScoutAttacker
 from redteam.agents.patcher import ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
+from redteam.scout import scout_target
 from redteam.targets import Target
 
-ATTACKERS: tuple[str, ...] = ("adaptive", "one-shot")
+ATTACKERS: tuple[str, ...] = ("adaptive", "one-shot", "white-box")
 PATCHERS: tuple[str, ...] = ("naive-first", "correct-first")
 
 
@@ -34,6 +35,8 @@ class BenchRow:
     audit_landed: int
     audit_total: int
     exposed_classes: tuple[str, ...]
+    probes_sent: int = 0
+    scout_leads_left: int = 0
 
     @property
     def false_confidence(self) -> bool:
@@ -56,6 +59,8 @@ class BenchRow:
             "audit_total": self.audit_total,
             "exposed_classes": list(self.exposed_classes),
             "false_confidence": self.false_confidence,
+            "probes_sent": self.probes_sent,
+            "scout_leads_left": self.scout_leads_left,
         }
 
 
@@ -84,7 +89,16 @@ def _row(target: Target, attacker: str, patcher: str, result: ArenaResult) -> Be
         audit_landed=result.audit.landed_count,
         audit_total=result.audit.total,
         exposed_classes=tuple(result.audit.exposed_classes),
+        probes_sent=sum(summary.probes_sent for summary in result.rounds),
+        scout_leads_left=len(scout_target(target, result.final_source)),
     )
+
+
+def _make_attacker(label: str, target: Target) -> PlaybookAttacker | ScoutAttacker:
+    """The attacker for one benchmark label."""
+    if label == "white-box":
+        return ScoutAttacker(target)
+    return PlaybookAttacker(target, adaptive=label == "adaptive")
 
 
 def run_bench(targets: Sequence[Target], *, rounds: int = 6, budget: int = 40) -> list[BenchRow]:
@@ -94,7 +108,7 @@ def run_bench(targets: Sequence[Target], *, rounds: int = 6, budget: int = 40) -
     for target in targets:
         for attacker_label in ATTACKERS:
             for patcher_label in PATCHERS:
-                attacker = PlaybookAttacker(target, adaptive=attacker_label == "adaptive")
+                attacker = _make_attacker(attacker_label, target)
                 patcher = ReferencePatcher(target, skip_naive=patcher_label == "correct-first")
                 result = Arena(attacker, patcher, target=target, config=config).run()
                 rows.append(_row(target, attacker_label, patcher_label, result))
@@ -102,22 +116,52 @@ def run_bench(targets: Sequence[Target], *, rounds: int = 6, budget: int = 40) -
 
 
 def _headline(rows: Sequence[BenchRow]) -> str:
-    """One sentence on false confidence, computed from the rows."""
+    """Sentences on false confidence and on the adaptive and white-box rows, from the rows."""
+    parts = [
+        _false_confidence_sentence(rows),
+        _adaptive_sentence(rows),
+        _white_box_sentence(rows),
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def _false_confidence_sentence(rows: Sequence[BenchRow]) -> str:
+    """One sentence on runs that reported hardened while the audit still got in."""
     flagged = [row for row in rows if row.false_confidence]
     if not flagged:
         return "No run reported a hardened app that the audit could break into."
     combos = sorted({f"{row.attacker} with {row.patcher} fixes" for row in flagged})
     where = f"all of them {combos[0]}" if len(combos) == 1 else f"from {', '.join(combos)}"
-    sentence = (
+    return (
         f"{len(flagged)} of {len(rows)} runs reported a hardened app that the audit still "
         f"broke into, {where}."
     )
+
+
+def _adaptive_sentence(rows: Sequence[BenchRow]) -> str:
+    """One sentence on the adaptive playbook runs that reported hardened."""
     adaptive = [row for row in rows if row.attacker == "adaptive" and row.loop_hardened]
     if not adaptive:
-        return sentence + " No adaptive run reported hardened."
+        return "No adaptive run reported hardened."
     if all(row.audit_landed == 0 for row in adaptive):
-        return sentence + " Every adaptive run that reported hardened passed the audit."
-    return sentence + " Some adaptive runs that reported hardened also failed the audit."
+        return "Every adaptive run that reported hardened passed the audit."
+    return "Some adaptive runs that reported hardened also failed the audit."
+
+
+def _white_box_sentence(rows: Sequence[BenchRow]) -> str:
+    """One sentence on the white-box runs: the audit verdict for those that reported hardened."""
+    white = [row for row in rows if row.attacker == "white-box"]
+    if not white:
+        return ""
+    hardened = [row for row in white if row.loop_hardened]
+    if not hardened:
+        return "No white-box run reported hardened."
+    if all(row.audit_landed == 0 for row in hardened):
+        return (
+            "Every white-box run that reported hardened passed the audit, "
+            "starting from no hand-written exploits."
+        )
+    return "Some white-box runs that reported hardened also failed the audit."
 
 
 def render_scorecard(rows: Sequence[BenchRow]) -> str:
@@ -129,22 +173,24 @@ def render_scorecard(rows: Sequence[BenchRow]) -> str:
     lines = [
         "# Benchmark scorecard",
         "",
-        "Every target was attacked under four strategies. After each run, the held-out exploits "
-        "the attacker never saw were replayed against the final app "
-        f"({totals_text}).",
+        "Every target was attacked under six strategies: three attackers, each with two patchers. "
+        "After each run, the held-out exploits the attacker never saw were replayed against the "
+        f"final app ({totals_text}).",
         "",
         f"**Headline:** {_headline(rows)}",
         "",
-        "| Target | Attacker | Patcher | Rounds | Exploits found | Bypasses caught | Patches "
-        "| Lines changed | Loop says | Audit | False confidence |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Target | Attacker | Patcher | Rounds | Probes sent | Exploits found "
+        "| Bypasses caught | Patches | Lines changed | Loop says | Audit | Scout leads left "
+        "| False confidence |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         loop = "hardened" if row.loop_hardened else "not hardened"
         lines.append(
             f"| {row.target} | {row.attacker} | {row.patcher} | {row.rounds} | "
-            f"{row.exploits_found} | {row.bypasses_caught} | {row.patches_accepted} | "
-            f"{row.lines_changed} | {loop} | {row.audit_landed} of {row.audit_total} landed | "
+            f"{row.probes_sent} | {row.exploits_found} | {row.bypasses_caught} | "
+            f"{row.patches_accepted} | {row.lines_changed} | {loop} | "
+            f"{row.audit_landed} of {row.audit_total} landed | {row.scout_leads_left} | "
             f"{'yes' if row.false_confidence else 'no'} |"
         )
 
@@ -164,6 +210,9 @@ def render_scorecard(rows: Sequence[BenchRow]) -> str:
         "",
         '- "Loop says" is the arena\'s own verdict: whether every weakness it found was closed.',
         '- "Audit" replays held-out exploits that the attacker never saw against the final app.',
+        '- "Probes sent" is the attack cost: every probe the attacker sent over the run.',
+        '- "Scout leads left" counts the static leads the scout still sees in the final app. '
+        "Zero means the scout agrees the app is fixed.",
         '- "False confidence" means the loop reported hardened while the audit still got in.',
     ]
     return "\n".join(lines) + "\n"
