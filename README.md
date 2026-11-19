@@ -83,7 +83,7 @@ The attacker only ever attacks the bundled sample app, and only inside the Pytho
 - The only secret in play is a random canary generated per run, and it is redacted from every log and report.
 - The seed source is never edited. Patches go to a per-run copy.
 
-`target/vulnerable_app.py` is vulnerable on purpose. Don't deploy it.
+`targets/notes/app.py` is vulnerable on purpose. Don't deploy it.
 
 ## Run it
 
@@ -114,7 +114,7 @@ With `--backend anthropic` the attacker and patcher call the model with structur
 
 ```
 src/redteam/
-  target/vulnerable_app.py   the deliberately vulnerable notes service
+  targets/notes/app.py       the deliberately vulnerable notes service
   sandbox.py                 in-process loader and the path-only probe boundary
   oracle.py                  canary leak and crash detection, evidence redaction
   agents/attacker.py         PlaybookAttacker, mutation engine, LLMAttacker

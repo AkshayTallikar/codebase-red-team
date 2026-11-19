@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: accepted for milestone 1
+Status: milestone 1 shipped; milestone 2 accepted (section 7)
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -40,7 +40,7 @@ Non-goals
 
 ## 3. Safety boundary
 
-The sample app (`src/redteam/target/vulnerable_app.py`) is deliberately
+The sample app (`src/redteam/targets/notes/app.py`) is deliberately
 vulnerable and exists only to be attacked by this project.
 
 - The sandbox loads the app's source from a working copy and mounts it on an
@@ -183,8 +183,95 @@ class LLMBackend(Protocol):
 
 ## 6. Later ideas
 
-- More weakness classes (mass assignment, SSRF against a mocked fetcher, auth
-  bypass via header confusion).
 - Let the attacker read the source (white-box mode) as well as the API.
-- Score patches by diff size and readability, not only by correctness.
 - Run several attacker strategies as a population and keep the ones that land.
+- Multi-step attack chains (log in, escalate, then read).
+
+## 7. Milestone 2: more targets, and a measured answer
+
+Milestone 1 shows the loop on one app. It cannot yet answer the question the
+project exists to ask: **does an adaptive attacker catch weak fixes that a
+one-shot scan would wave through?** Milestone 2 makes targets pluggable, adds a
+second app with three new weakness classes, and measures the answer with a
+held-out exploit audit.
+
+### 7.1 Target interface
+
+A target is a value, not a hard-coded path:
+
+```python
+@dataclass(frozen=True)
+class Target:
+    name: str  # "notes", "billing"
+    description: str  # one line, used in LLM prompts
+    seed_path: Path  # the deliberately vulnerable app source
+    vuln_classes: tuple[str, ...]
+    attacker_token: str  # identity every probe is sent as
+    user_token: str  # the legitimate user the gate checks
+    functional_checks: tuple[FunctionalCheck, ...]
+    seed_probes: tuple[Probe, ...]  # the playbook's first hypotheses
+    audit_probes: tuple[Probe, ...]  # held-out exploits, never shown to attackers
+    fix_catalog: dict[str, tuple[FixAttempt, ...]]
+    patch_guidance: str  # what must keep working, for the LLM patcher
+    isolate_probes: bool  # rebuild app state before every probe
+    write_data: Callable[[Path, str], None]  # data dir for a given canary
+```
+
+The sandbox, gate, attackers, patchers, arena and CLI all take a target, and
+default to `notes`, so milestone 1 behaviour and its demo stay identical.
+`isolate_probes` exists because some exploits change state (a user promotes
+themselves to admin); without a reset, one landed probe would make every later
+probe look like an exploit.
+
+### 7.2 Second target: `billing`
+
+An invoicing service with users `admin`, `alice` and `mallory`. The canary is
+the organisation's payout secret, visible only to admins, and the body of an
+internal metadata endpoint.
+
+| Class | Endpoint | Weakness | Naive first fix | Bypass |
+|---|---|---|---|---|
+| `mass_assignment` | `PATCH /me` | copies any known field from the JSON body, keys normalised | reject the key `role` | `Role`, `ROLE`, ` role` |
+| `ssrf` | `GET /invoices/import?url=` | fetches any URL through an in-memory fake web | block the text `metadata.internal` | upper case host, trailing dot, raw IP, decimal IP, `localhost` |
+| `auth_bypass` | `GET /admin/settings` | trusts an `X-Forwarded-User` header | reject the value `admin` | `Admin`, ` admin` |
+| `idor` | `GET /invoices/{invoice_id}` | no ownership check | (real fix only) | |
+
+The fake web is a dictionary behind a tiny resolver (lower-cases the host,
+drops a trailing dot, maps names and decimal IPs to addresses). No socket is
+ever opened. The real fixes are an editable-field allowlist, a parsed-URL host
+allowlist, dropping header trust, and an owner check.
+
+### 7.3 Held-out audit and the benchmark
+
+`audit(source, target)` replays the target's `audit_probes`, each in a fresh
+copy of the app, and reports which classes are still exploitable. The loop never
+sees these probes, so the audit is an independent measure of residual risk.
+
+`redteam bench` runs every target under four strategies and audits each result:
+
+| Attacker | Patcher |
+|---|---|
+| adaptive (seeds, then mutations of what landed and what was blocked) | naive first (rushed fix, then the real one) |
+| one-shot (seeds only, like a single scanner pass) | correct first (real fix straight away) |
+
+`SCORECARD.md` reports, per run: rounds, exploits found, bypasses caught,
+patches accepted, lines changed by patches, the loop's verdict, and the audit's
+verdict. The headline cell is **false confidence**: the loop said "hardened"
+while the audit still got in. The expectation, which the scorecard must show
+rather than assume, is that one-shot plus naive-first reports hardened apps that
+are not, and adaptive closes that gap.
+
+### 7.4 LLM agents
+
+Both LLM agents become target-aware: the attacker schema accepts headers and a
+JSON body and limits classes to the target's, and the patcher's system prompt is
+built from the target's description and guidance. Tests still use the offline
+fake, so CI needs no key.
+
+### 7.5 Milestone 2 scope
+
+1. Target interface, with `notes` moved behind it unchanged.
+2. The `billing` target, its playbook seeds and mutations, and its fix catalog.
+3. Held-out audit, `redteam bench`, and `SCORECARD.md`.
+4. Target-aware LLM attacker and patcher.
+5. README, design and recorded runs for both targets plus the scorecard.

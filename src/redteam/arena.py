@@ -15,6 +15,7 @@ from redteam.ledger import Ledger
 from redteam.models import Finding, Patch, Probe
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
+from redteam.targets import Target, default_target
 
 STOP_CLEAN = "clean_round"
 STOP_EXHAUSTED = "attacker_exhausted"
@@ -77,6 +78,7 @@ class Arena:
         attacker: Attacker,
         patcher: Patcher,
         *,
+        target: Target | None = None,
         gate: VerificationGate | None = None,
         config: ArenaConfig | None = None,
         out_dir: str | Path | None = None,
@@ -84,20 +86,27 @@ class Arena:
     ) -> None:
         self.attacker = attacker
         self.patcher = patcher
-        self.gate = gate if gate is not None else VerificationGate()
+        self.target = target if target is not None else default_target()
+        self.gate = gate if gate is not None else VerificationGate(self.target)
         self.config = config if config is not None else ArenaConfig()
         self.out_dir = Path(out_dir) if out_dir is not None else None
         self.source = source
 
     def run(self) -> ArenaResult:
         """Play the rounds, write outputs if an output directory is set, and return the result."""
-        sandbox = Sandbox(self.source)
+        sandbox = Sandbox(self.source, target=self.target)
         try:
             result = _Campaign(self, sandbox).play()
         finally:
             sandbox.close()
         if self.out_dir is not None:
-            _write_outputs(self.out_dir, result, self.attacker.name, self.patcher.name)
+            _write_outputs(
+                self.out_dir,
+                result,
+                self.attacker.name,
+                self.patcher.name,
+                target_name=self.target.name,
+            )
         return result
 
 
@@ -121,6 +130,7 @@ class _Campaign:
         config = self.arena.config
         self.ledger.log(
             "run_started",
+            target=self.arena.target.name,
             attacker=self.arena.attacker.name,
             patcher=self.arena.patcher.name,
             rounds=config.rounds,
@@ -152,6 +162,8 @@ class _Campaign:
         landed_count = 0
         round_findings: dict[str, Finding] = {}
         for probe in probes:
+            if self.arena.target.isolate_probes:
+                self.sandbox.reset()
             finding = self.oracle.judge(self.sandbox.send(probe))
             self.history.record(probe, landed=finding is not None)
             self.ledger.log(
@@ -285,7 +297,12 @@ class _Campaign:
 
 
 def _write_outputs(
-    out_dir: Path, result: ArenaResult, attacker_name: str, patcher_name: str
+    out_dir: Path,
+    result: ArenaResult,
+    attacker_name: str,
+    patcher_name: str,
+    *,
+    target_name: str = "notes",
 ) -> None:
     """Write the final source, regression cases, a summary and the Markdown report."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -297,6 +314,7 @@ def _write_outputs(
     _write_json(out_dir / "regressions.json", regressions)
 
     summary: dict[str, Any] = {
+        "target": target_name,
         "stop_reason": result.stop_reason,
         "hardened": result.hardened,
         "rounds": len(result.rounds),
@@ -305,7 +323,7 @@ def _write_outputs(
     }
     _write_json(out_dir / "summary.json", summary)
 
-    report = render_report(result, attacker_name, patcher_name)
+    report = render_report(result, attacker_name, patcher_name, target_name=target_name)
     (out_dir / "ARMS_RACE.md").write_text(report, encoding="utf-8")
 
 
@@ -341,12 +359,19 @@ def _bypassed(result: ArenaResult, key: str) -> bool:
     return result.accepted_patches.get(key, 0) >= 2 or key in result.bypassed_keys
 
 
-def render_report(result: ArenaResult, attacker_name: str, patcher_name: str) -> str:
+def render_report(
+    result: ArenaResult,
+    attacker_name: str,
+    patcher_name: str,
+    *,
+    target_name: str = "notes",
+) -> str:
     """Render the arms race as Markdown: a scoreboard, then one section per round."""
     verdict = "hardened" if result.hardened else "not hardened"
     lines = [
         "# Arms race report",
         "",
+        f"Target: {target_name} · "
         f"Attacker: {attacker_name} · Patcher: {patcher_name} · Rounds: {len(result.rounds)} · "
         f"Stopped: {result.stop_reason} · Result: {verdict}, {len(result.open_findings)} open",
         "",
