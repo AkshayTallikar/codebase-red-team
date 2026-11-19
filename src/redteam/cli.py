@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from redteam.agents.patcher import LLMPatcher, Patcher, ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
 from redteam.bench import run_bench, write_bench
 from redteam.llm import LLMError, make_backend
+from redteam.scout import render, scout_target
 from redteam.targets import DEFAULT_TARGET, TARGETS, Target, get_target
 
 DEFAULT_ROUNDS = 6
@@ -65,6 +67,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="output directory (default bench/<UTC timestamp>)",
     )
+    scout = commands.add_parser(
+        "scout", help="list static exploit leads in a target's source, without running it"
+    )
+    scout.add_argument(
+        "--target",
+        choices=sorted(TARGETS),
+        default=DEFAULT_TARGET,
+        help="app to scout (default %(default)s)",
+    )
+    scout.add_argument(
+        "--source", default=None, help="scout this file instead of the target's seed source"
+    )
+    scout.add_argument("--json", action="store_true", help="print the leads as JSON")
     return parser
 
 
@@ -91,6 +106,22 @@ def _bench(args: argparse.Namespace) -> int:
         )
     print(f"scorecard: {out_dir / 'SCORECARD.md'}")
     return EXIT_HARDENED
+
+
+def _scout(args: argparse.Namespace) -> int:
+    """Print the static leads for one target, as text or JSON. Always exits 0."""
+    target = get_target(args.target)
+    source = Path(args.source).read_text(encoding="utf-8") if args.source else None
+    hypotheses = scout_target(target, source)
+    if args.json:
+        print(json.dumps([hyp.to_dict() for hyp in hypotheses], indent=2))
+        return 0
+    text = render(hypotheses)
+    if text:
+        print(text)
+    noun = "lead" if len(hypotheses) == 1 else "leads"
+    print(f"{len(hypotheses)} {noun} in {target.name}")
+    return 0
 
 
 def _build_agents(backend_name: str, model: str | None, target: Target) -> tuple[Attacker, Patcher]:
@@ -121,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "bench":
         return _bench(args)
+    if args.command == "scout":
+        return _scout(args)
     target = get_target(args.target)
     try:
         attacker, patcher = _build_agents(args.backend, args.model, target)
