@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: milestones 1, 2 and 3 shipped (sections 7 and 8)
+Status: milestones 1, 2 and 3 shipped (sections 7 and 8); milestone 4 in progress (section 9)
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -337,3 +337,52 @@ checked byte for byte, and embedded in the README.
 2. White-box attacker, the arena source hook, and the benchmark rows.
 3. Arms-race timeline SVG for every run.
 4. README, design and recorded runs refreshed, plus a short guide to adding a target.
+
+## 9. Milestone 4: does the scout generalise?
+
+The scout was written while looking at `notes` and `billing`, so finding all
+eight of their weaknesses says little about a codebase it has never seen. A
+rule like "a URL parameter passed to a function whose name contains fetch" fits
+billing exactly and may miss the same bug spelled differently. Milestone 4
+measures that gap honestly, then closes it with general rules.
+
+### 9.1 A held-out target
+
+A third target, `library`, is written by an agent that is not shown the scout,
+its rules or its tests. It gets only the list of vulnerability classes and an
+instruction to write the app the way a different team would: helper functions
+between route and query, `pathlib` instead of `os.path`, `str.format` and `%`
+formatting, identity from somewhere other than one header. It follows the same
+Target contract as the other two (functional checks, seed probes, a fix catalog
+with naive fixes, held-out audit probes) so the black-box loop and the benchmark
+work on it unchanged.
+
+Before the scout is touched, it is run on `library` cold, and the result is
+recorded as is: which seeded weaknesses it found, which it missed and why, and
+any false leads.
+
+### 9.2 Generalising the scout
+
+Each miss is fixed with a rule that is more general, never with a pattern that
+names something specific to `library`. Expected directions: following a tainted
+value into a local helper function, taint through `str.format` and `%`,
+`pathlib` joins, treating any URL-shaped parameter that reaches an outbound call
+as an SSRF lead, and identity taken from any caller-controlled input. The
+existing guarantees must still hold on `notes` and `billing`: every seeded
+weakness found, naive fixes still flagged, nothing flagged after the real fixes.
+The milestone reports scout recall and false leads on all three targets, before
+and after.
+
+### 9.3 Scout output for code scanning, and secret scanning
+
+`redteam scout --sarif` writes SARIF 2.1.0, the format GitHub code scanning and
+most editors read, so the scout's leads can be viewed as ordinary code-scanning
+alerts. Because the repository is public, CI also runs a secret scan of the
+tree on every push, against a committed baseline.
+
+### 9.4 Milestone 4 scope
+
+1. The held-out `library` target, and the scout's cold result on it.
+2. General scout rules that find what it missed, without losing anything on the first two targets.
+3. SARIF output and secret scanning in CI.
+4. README, design, recordings and scorecard refreshed for three targets.
