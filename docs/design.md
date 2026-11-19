@@ -361,6 +361,37 @@ Before the scout is touched, it is run on `library` cold, and the result is
 recorded as is: which seeded weaknesses it found, which it missed and why, and
 any false leads.
 
+#### Cold result
+
+`redteam scout --target library` reported **0 leads: 0 of 6 seeded weaknesses
+found, and no false leads**. Every miss has the same root cause: each rule looks
+only at the route's own body, and taint starts only from path and query
+parameters. Class by class:
+
+| Weakness | Where `library` puts it | Why the scout missed it |
+|---|---|---|
+| sqli | `str.format` on the SQL text inside `LibraryRepo.search_books` | the `.execute(` call is in a helper, and `.format(...)` is not one of the string builders it tracks (f-string, `%`, `+`) |
+| idor | `repo.loan_by_id(loan_id)` with no owner check | the id never reaches `.execute(` inside the route |
+| path_traversal | `covers_dir / name` then `.read_text()` in `read_cover` | the join and the read are in a helper, and a `pathlib` `/` join is not recognised |
+| ssrf | `fetch_from_fake_web(web, body.url)` | the URL is a field of a pydantic body, not a path or query parameter |
+| mass_assignment | `model_dump(exclude_unset=True)` loop writing through `set_member_field` | the write is in a helper, and `is_staff` is not in the privileged-name list |
+| auth_bypass | an `as_member` cookie read in the `current_member` dependency | the rule expects a `["role"]` comparison on a header-derived user inside the route |
+
+The white-box attacker inherits the blindness. `redteam run --target library
+--attacker white-box` sent 0 probes and stopped after one round reporting
+"hardened", while the held-out audit landed 10 of 11 exploits on that same
+app. That is the false confidence the benchmark exists to expose, and it is why
+milestone 4 also changes the verdict: a run that sent no probes is reported as
+untested, not hardened. The black-box playbook, which does not rely on the
+scout, ends hardened on `library` with a clean audit (9/6, 21/3, 39/0 probes and
+findings per round).
+
+The agent that wrote `library` was told not to read the scout, its tests or
+this section. In one search over the tests it saw the lines naming the
+existing targets in the scout's test files, and it listed this document's
+headings; it read no rule or test body. The app follows the style the
+instruction above asked for, which is public in this section anyway.
+
 ### 9.2 Generalising the scout
 
 Each miss is fixed with a rule that is more general, never with a pattern that
@@ -383,6 +414,6 @@ tree on every push, against a committed baseline.
 ### 9.4 Milestone 4 scope
 
 1. The held-out `library` target, and the scout's cold result on it.
-2. General scout rules that find what it missed, without losing anything on the first two targets.
+2. General scout rules that find what it missed, without losing anything on the first two targets, and an "untested" verdict for a run that sent no probes.
 3. SARIF output and secret scanning in CI.
 4. README, design, recordings and scorecard refreshed for three targets.

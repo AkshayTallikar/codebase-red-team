@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from redteam.targets.base import Target
 from redteam.targets.billing import BILLING
+from redteam.targets.library import LIBRARY
 from redteam.targets.notes import NOTES
 
 DEFAULT_TARGET = "notes"
-TARGETS: dict[str, Target] = {"notes": NOTES, "billing": BILLING}
+TARGETS: dict[str, Target] = {"notes": NOTES, "billing": BILLING, "library": LIBRARY}
 
 
 def get_target(name: str) -> Target:
@@ -27,6 +28,7 @@ def default_target() -> Target:
 __all__ = [
     "BILLING",
     "DEFAULT_TARGET",
+    "LIBRARY",
     "NOTES",
     "TARGETS",
     "Target",

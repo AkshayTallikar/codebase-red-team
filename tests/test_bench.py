@@ -14,7 +14,7 @@ from redteam.cli import main
 from redteam.models import Finding
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
-from redteam.targets import BILLING, NOTES, Target
+from redteam.targets import BILLING, NOTES, TARGETS, Target
 
 
 def _seed_finding(target: Target, key: str) -> Finding:
@@ -174,6 +174,6 @@ def test_bench_command_writes_the_scorecard_and_json(tmp_path) -> None:
     scorecard = (tmp_path / "SCORECARD.md").read_text(encoding="utf-8")
     assert "| notes | adaptive | naive-first |" in scorecard
     data = json.loads((tmp_path / "scorecard.json").read_text(encoding="utf-8"))
-    assert len(data) == 12
+    assert len(data) == 6 * len(TARGETS)
     assert all("false_confidence" in entry for entry in data)
     assert all("probes_sent" in entry and "scout_leads_left" in entry for entry in data)
