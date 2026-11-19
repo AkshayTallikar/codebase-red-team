@@ -1,0 +1,21 @@
+{
+  "accepted_patches": {
+    "auth_bypass:GET /admin/settings": 2,
+    "idor:GET /invoices/{invoice_id}": 1,
+    "mass_assignment:PATCH /me": 2,
+    "ssrf:GET /invoices/import": 2
+  },
+  "audit": {
+    "clean": true,
+    "exposed_classes": [],
+    "landed": {},
+    "landed_count": 0,
+    "target": "billing",
+    "total": 11
+  },
+  "hardened": true,
+  "open_keys": [],
+  "rounds": 3,
+  "stop_reason": "clean_round",
+  "target": "billing"
+}

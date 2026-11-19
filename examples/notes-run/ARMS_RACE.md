@@ -1,6 +1,6 @@
 # Arms race report
 
-Attacker: playbook · Patcher: reference · Rounds: 3 · Stopped: clean_round · Result: hardened, 0 open
+Target: notes · Attacker: playbook · Patcher: reference · Rounds: 3 · Stopped: clean_round · Result: hardened, 0 open
 
 ## Scoreboard
 
@@ -10,6 +10,10 @@ Attacker: playbook · Patcher: reference · Rounds: 3 · Stopped: clean_round ·
 | `idor:GET /notes/{note_id}` | 1 | no | closed |
 | `path_traversal:GET /files` | 2 | yes | closed |
 | `crash:GET /notes` | 1 | no | closed |
+
+## Independent audit
+
+Replayed 11 held-out exploits the attacker never saw: none landed.
 
 ## Round 1
 
