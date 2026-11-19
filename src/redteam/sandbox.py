@@ -17,10 +17,13 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from redteam.models import Probe, ProbeResult
+from redteam.targets import NOTES, Target, default_target
 
-ATTACKER_TOKEN = "mallory-token"
-ALICE_TOKEN = "alice-token"
-SEED_SOURCE_PATH = Path(__file__).parent / "target" / "vulnerable_app.py"
+# Old names for the notes target, kept so existing callers keep working.
+ATTACKER_TOKEN = NOTES.attacker_token
+ALICE_TOKEN = NOTES.user_token
+SEED_SOURCE_PATH = NOTES.seed_path
+_USE_TARGET_TOKEN: Any = object()
 ALLOWED_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 BASE_URL = "http://target.sandbox"
 
@@ -34,8 +37,8 @@ class TargetLoadError(RuntimeError):
 
 
 def load_seed_source() -> str:
-    """Return the source text of the seed target app."""
-    return SEED_SOURCE_PATH.read_text(encoding="utf-8")
+    """Return the source text of the notes seed app."""
+    return NOTES.load_source()
 
 
 def validate_probe(probe: Probe) -> None:
@@ -65,9 +68,11 @@ class Sandbox:
         self,
         source: str | None = None,
         *,
+        target: Target | None = None,
         workdir: str | Path | None = None,
         canary: str | None = None,
     ) -> None:
+        self.target = target if target is not None else default_target()
         self._owns_workdir = workdir is None
         if workdir is None:
             self.workdir = Path(tempfile.mkdtemp(prefix="redteam-"))
@@ -77,23 +82,17 @@ class Sandbox:
 
         self.canary = canary or f"CANARY-{secrets.token_hex(8)}"
         self.data_dir = self.workdir / "data"
-        self._write_data_dir()
+        self.target.write_data(self.data_dir, self.canary)
 
         self._version = 0
         self.source: str | None = None
         self.app: Any = None
         self._client: TestClient | None = None
         try:
-            self.load(source if source is not None else load_seed_source())
+            self.load(source if source is not None else self.target.load_source())
         except Exception:
             self.close()
             raise
-
-    def _write_data_dir(self) -> None:
-        public = self.data_dir / "public"
-        public.mkdir(parents=True, exist_ok=True)
-        (public / "readme.txt").write_text("Welcome to the notes service.\n", encoding="utf-8")
-        (self.data_dir / "secrets.txt").write_text(f"db_password={self.canary}\n", encoding="utf-8")
 
     def load(self, source: str) -> None:
         """Build a new app from `source`. On failure the previous app stays in place."""
@@ -122,11 +121,23 @@ class Sandbox:
         self.app = app
         self._client = client
 
-    def send(self, probe: Probe, *, token: str | None = ATTACKER_TOKEN) -> ProbeResult:
-        """Send one validated probe to the app and return the raw result."""
+    def reset(self) -> None:
+        """Rebuild the app from its current source, so no state from earlier probes remains."""
+        if self.source is None:
+            raise RuntimeError("sandbox has no source loaded")
+        self.load(self.source)
+
+    def send(self, probe: Probe, *, token: str | None | Any = _USE_TARGET_TOKEN) -> ProbeResult:
+        """Send one validated probe to the app and return the raw result.
+
+        Without `token` the probe is sent as the target's attacker. `token=None` sends no
+        X-Token header at all.
+        """
         validate_probe(probe)
         if self._client is None:
             raise RuntimeError("sandbox is closed")
+        if token is _USE_TARGET_TOKEN:
+            token = self.target.attacker_token
         headers = {"X-Token": token} if token else {}
         headers.update(probe.headers)
         kwargs: dict[str, Any] = {"params": probe.params, "headers": headers}

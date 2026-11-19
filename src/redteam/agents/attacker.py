@@ -14,6 +14,7 @@ from typing import Any, Protocol
 from redteam.llm.base import LLMBackend, LLMError
 from redteam.models import VULN_CLASSES, Probe
 from redteam.sandbox import ProbeRejected, validate_probe
+from redteam.targets import NOTES, Target, default_target
 
 
 @dataclass
@@ -174,60 +175,22 @@ def mutate(probe: Probe) -> list[Probe]:
 
 
 def _seed_probes() -> list[Probe]:
-    """The first-round hypotheses, one or more per vulnerability class."""
-    probes = [
-        Probe(
-            method="GET",
-            path="/notes/search",
-            endpoint="GET /notes/search",
-            vuln_class="sqli",
-            params={"q": "' OR 1=1 --"},
-            note="sqli: tautology in the search query may return other users' notes",
-        ),
-    ]
-    probes.extend(
-        Probe(
-            method="GET",
-            path=f"/notes/{note_id}",
-            endpoint="GET /notes/{note_id}",
-            vuln_class="idor",
-            note="idor: note ids may be read across owners",
-        )
-        for note_id in range(1, 6)
-    )
-    probes.append(
-        Probe(
-            method="GET",
-            path="/files",
-            endpoint="GET /files",
-            vuln_class="path_traversal",
-            params={"name": "../secrets.txt"},
-            note="path_traversal: name may escape the public data directory",
-        )
-    )
-    probes.extend(
-        Probe(
-            method="GET",
-            path="/notes",
-            endpoint="GET /notes",
-            vuln_class="crash",
-            params={"limit": limit},
-            note="crash: unvalidated limit may reach slicing or division",
-        )
-        for limit in ("0", "abc")
-    )
-    return probes
+    """The notes target's first-round hypotheses. Kept for existing callers."""
+    return list(NOTES.seed_probes)
 
 
 class PlaybookAttacker:
-    """Replays the seed playbook, then mutates whatever landed or was blocked."""
+    """Replays the target's seed playbook, then mutates whatever landed or was blocked."""
 
     name = "playbook"
+
+    def __init__(self, target: Target | None = None) -> None:
+        self.target = target if target is not None else default_target()
 
     def plan(self, routes: list[str], history: AttackHistory, budget: int) -> list[Probe]:
         """Return the seed probes first, then mutations of known exploits."""
         if not history.sent:
-            batch = _seed_probes()
+            batch = list(self.target.seed_probes)
         else:
             batch = []
             for probe in history.landed:

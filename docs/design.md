@@ -40,7 +40,7 @@ Non-goals
 
 ## 3. Safety boundary
 
-The sample app (`src/redteam/target/vulnerable_app.py`) is deliberately
+The sample app (`src/redteam/targets/notes/app.py`) is deliberately
 vulnerable and exists only to be attacked by this project.
 
 - The sandbox loads the app's source from a working copy and mounts it on an
@@ -202,19 +202,19 @@ A target is a value, not a hard-coded path:
 ```python
 @dataclass(frozen=True)
 class Target:
-    name: str                    # "notes", "billing"
-    description: str             # one line, used in LLM prompts
-    seed_path: Path              # the deliberately vulnerable app source
+    name: str  # "notes", "billing"
+    description: str  # one line, used in LLM prompts
+    seed_path: Path  # the deliberately vulnerable app source
     vuln_classes: tuple[str, ...]
-    attacker_token: str          # identity every probe is sent as
-    user_token: str              # the legitimate user the gate checks
+    attacker_token: str  # identity every probe is sent as
+    user_token: str  # the legitimate user the gate checks
     functional_checks: tuple[FunctionalCheck, ...]
-    seed_probes: tuple[Probe, ...]       # the playbook's first hypotheses
-    audit_probes: tuple[Probe, ...]      # held-out exploits, never shown to attackers
+    seed_probes: tuple[Probe, ...]  # the playbook's first hypotheses
+    audit_probes: tuple[Probe, ...]  # held-out exploits, never shown to attackers
     fix_catalog: dict[str, tuple[FixAttempt, ...]]
-    patch_guidance: str          # what must keep working, for the LLM patcher
-    isolate_probes: bool         # rebuild app state before every probe
-    write_data: Callable[[Path, str], None]   # data dir for a given canary
+    patch_guidance: str  # what must keep working, for the LLM patcher
+    isolate_probes: bool  # rebuild app state before every probe
+    write_data: Callable[[Path, str], None]  # data dir for a given canary
 ```
 
 The sandbox, gate, attackers, patchers, arena and CLI all take a target, and

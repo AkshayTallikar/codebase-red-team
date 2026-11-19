@@ -99,6 +99,28 @@ class Edit:
 
 
 @dataclass(frozen=True)
+class FixAttempt:
+    """One fix for a weakness: a rationale and alternative edit-sets to try in order.
+
+    `naive` marks a rushed fix that is expected to be bypassed later.
+    """
+
+    rationale: str
+    alternatives: tuple[tuple[Edit, ...], ...]
+    naive: bool = False
+
+
+@dataclass(frozen=True)
+class FunctionalCheck:
+    """A normal-use request that must keep working after every patch."""
+
+    name: str
+    probe: Probe
+    expect_status: int
+    expect_text: str | None = None
+
+
+@dataclass(frozen=True)
 class Patch:
     finding_key: str
     edits: tuple[Edit, ...]
