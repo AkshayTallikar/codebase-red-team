@@ -13,6 +13,7 @@ from redteam.agents.patcher import LLMPatcher, Patcher, ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
 from redteam.bench import run_bench, write_bench
 from redteam.llm import LLMError, make_backend
+from redteam.sarif import artifact_uri, to_sarif
 from redteam.scout import render, scout_target
 from redteam.targets import DEFAULT_TARGET, TARGETS, Target, get_target
 
@@ -89,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--source", default=None, help="scout this file instead of the target's seed source"
     )
     scout.add_argument("--json", action="store_true", help="print the leads as JSON")
+    scout.add_argument(
+        "--sarif",
+        default=None,
+        metavar="PATH",
+        help="also write the leads as SARIF 2.1.0 for code scanning tools",
+    )
     return parser
 
 
@@ -122,6 +129,10 @@ def _scout(args: argparse.Namespace) -> int:
     target = get_target(args.target)
     source = Path(args.source).read_text(encoding="utf-8") if args.source else None
     hypotheses = scout_target(target, source)
+    if args.sarif:
+        scanned = Path(args.source) if args.source else target.seed_path
+        log = to_sarif(hypotheses, artifact_uri(scanned))
+        Path(args.sarif).write_text(json.dumps(log, indent=2) + "\n", encoding="utf-8")
     if args.json:
         print(json.dumps([hyp.to_dict() for hyp in hypotheses], indent=2))
         return 0
