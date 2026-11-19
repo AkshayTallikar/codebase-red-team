@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: milestones 1 and 2 shipped (section 7); milestone 3 in progress (section 8)
+Status: milestones 1, 2 and 3 shipped (sections 7 and 8)
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -316,6 +316,13 @@ after every patch: a naive fix that leaves the sink in place stays on its list,
 and mutation of blocked probes works as in the adaptive playbook. The benchmark
 gains a white-box row per patcher, and two columns: probes sent (attack cost)
 and scout leads left on the final app (static residual risk next to the audit).
+
+Building it exposed a gap in the patch loop. The scout sends several variants
+of each exploit at once, so the gate rejects a naive fix that blocks only one of
+them. The patcher's attempt counter used to advance only on accepted patches,
+so it re-proposed the rejected fix every round and the real fix was never
+tried. The counter now counts every proposal for a weakness, so a rejection
+escalates exactly like a bypass does.
 
 ### 8.3 Arms-race timeline
 
