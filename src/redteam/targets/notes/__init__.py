@@ -216,6 +216,106 @@ _FIX_CATALOG: dict[str, tuple[FixAttempt, ...]] = {
 }
 
 
+def _audit_probes() -> tuple[Probe, ...]:
+    """Held-out exploit variants, written apart from the playbook. The attacker never sees them.
+
+    Each probe is an exploit against the seed app or against the app after the naive fixes,
+    and every one is blocked once the real fixes land. Two search probes get past the naive
+    OR-keyword block. `....//secrets.txt` is harmless on the seed (`....` is an ordinary
+    directory name) but becomes `../secrets.txt` after the naive `../` strip.
+    """
+    search = "GET /notes/search"
+    return (
+        Probe(
+            "GET",
+            "/notes/search",
+            search,
+            vuln_class="sqli",
+            params={"q": "' or 'a'='a' --"},
+            note="audit: quoted tautology with a trailing comment",
+        ),
+        Probe(
+            "GET",
+            "/notes/search",
+            search,
+            vuln_class="sqli",
+            params={"q": "x' UNION SELECT id, title, body FROM notes --"},
+            note="audit: union select over every note",
+        ),
+        Probe(
+            "GET",
+            "/notes/search",
+            search,
+            vuln_class="sqli",
+            params={"q": "%' OR owner_id=1 --"},
+            note="audit: or-clause on the admin's owner id",
+        ),
+        Probe(
+            "GET",
+            "/notes/1",
+            "GET /notes/{note_id}",
+            vuln_class="idor",
+            note="audit: note 1 belongs to the admin",
+        ),
+        Probe(
+            "GET",
+            "/files",
+            "GET /files",
+            vuln_class="path_traversal",
+            params={"name": "..//secrets.txt"},
+            note="audit: dot-dot with a doubled slash",
+        ),
+        Probe(
+            "GET",
+            "/files",
+            "GET /files",
+            vuln_class="path_traversal",
+            params={"name": "./../secrets.txt"},
+            note="audit: dot-slash before dot-dot",
+        ),
+        Probe(
+            "GET",
+            "/files",
+            "GET /files",
+            vuln_class="path_traversal",
+            params={"name": "././../secrets.txt"},
+            note="audit: two dot-slash before dot-dot",
+        ),
+        Probe(
+            "GET",
+            "/files",
+            "GET /files",
+            vuln_class="path_traversal",
+            params={"name": "....//secrets.txt"},
+            note="audit: nested dot-dot that the naive strip collapses into ../",
+        ),
+        Probe(
+            "GET",
+            "/notes",
+            "GET /notes",
+            vuln_class="crash",
+            params={"limit": "0"},
+            note="audit: zero page size divides by zero",
+        ),
+        Probe(
+            "GET",
+            "/notes",
+            "GET /notes",
+            vuln_class="crash",
+            params={"limit": "-0"},
+            note="audit: signed zero page size",
+        ),
+        Probe(
+            "GET",
+            "/notes",
+            "GET /notes",
+            vuln_class="crash",
+            params={"limit": "nan"},
+            note="audit: non-numeric page size",
+        ),
+    )
+
+
 NOTES = Target(
     name="notes",
     description="a notes service where users list, search, read and create their own notes "
@@ -233,4 +333,5 @@ NOTES = Target(
         "queries, ownership checks, resolved-path containment and input validation."
     ),
     write_data=_write_data,
+    audit_probes=_audit_probes(),
 )
