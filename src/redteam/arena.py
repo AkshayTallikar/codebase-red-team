@@ -10,6 +10,7 @@ from typing import Any
 
 from redteam.agents.attacker import Attacker, AttackHistory
 from redteam.agents.patcher import Patcher
+from redteam.audit import AuditResult, audit
 from redteam.gate import VerificationGate
 from redteam.ledger import Ledger
 from redteam.models import Finding, Patch, Probe
@@ -63,6 +64,7 @@ class ArenaResult:
     open_findings: dict[str, Finding]
     stop_reason: str
     bypassed_keys: frozenset[str] = field(default_factory=frozenset)
+    audit: AuditResult | None = None
 
     @property
     def hardened(self) -> bool:
@@ -99,6 +101,7 @@ class Arena:
             result = _Campaign(self, sandbox).play()
         finally:
             sandbox.close()
+        result.audit = audit(result.final_source, self.target)
         if self.out_dir is not None:
             _write_outputs(
                 self.out_dir,
@@ -321,6 +324,8 @@ def _write_outputs(
         "accepted_patches": result.accepted_patches,
         "open_keys": sorted(result.open_findings),
     }
+    if result.audit is not None:
+        summary["audit"] = result.audit.to_dict()
     _write_json(out_dir / "summary.json", summary)
 
     report = render_report(result, attacker_name, patcher_name, target_name=target_name)
@@ -352,6 +357,36 @@ def _patch_line(outcome: PatchOutcome) -> str:
         detail = "; ".join(outcome.reasons)
         verdict = "rejected"
     return f"- `{outcome.key}` attempt {outcome.attempt}, {verdict}: {detail}"
+
+
+def _probe_detail(probe: Probe) -> str:
+    """`METHOD /path k="v"`, plus the JSON body and headers when the probe has them."""
+    text = _probe_text(probe)
+    if probe.json_body is not None:
+        text += f" body={json.dumps(probe.json_body, sort_keys=True)}"
+    if probe.headers:
+        text += f" headers={json.dumps(probe.headers, sort_keys=True)}"
+    return text
+
+
+def _audit_lines(audit_result: AuditResult) -> list[str]:
+    """The independent audit section: how many held-out exploits landed, and each one."""
+    lines = ["", "## Independent audit", ""]
+    if audit_result.clean:
+        lines.append(
+            f"Replayed {audit_result.total} held-out exploits the attacker never saw: none landed."
+        )
+        return lines
+    classes = ", ".join(audit_result.exposed_classes)
+    lines.append(
+        f"Replayed {audit_result.total} held-out exploits the attacker never saw: "
+        f"{audit_result.landed_count} landed, in {classes}."
+    )
+    lines.append("")
+    for cls in audit_result.exposed_classes:
+        for probe in audit_result.landed[cls]:
+            lines.append(f"- `{cls}`: `{_probe_detail(probe)}`")
+    return lines
 
 
 def _bypassed(result: ArenaResult, key: str) -> bool:
@@ -390,6 +425,9 @@ def render_report(
             lines.append(f"| `{_cell(key)}` | {accepted} | {bypassed} | {status} |")
     else:
         lines.append("No weakness landed during this run.")
+
+    if result.audit is not None:
+        lines += _audit_lines(result.audit)
 
     last_index = len(result.rounds) - 1
     for index, summary in enumerate(result.rounds):

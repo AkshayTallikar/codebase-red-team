@@ -51,8 +51,13 @@ def finalize(
     routes: list[str],
     history: AttackHistory,
     budget: int,
+    *,
+    replay: bool = False,
 ) -> list[Probe]:
-    """Keep only valid, new, unique probes on known routes, up to `budget`."""
+    """Keep only valid, unique probes on known routes, up to `budget`.
+
+    Probes already sent are dropped unless `replay` is set, which re-sends them on purpose.
+    """
     known = set(routes)
     seen: set[str] = set()
     kept: list[Probe] = []
@@ -65,7 +70,7 @@ def finalize(
             validate_probe(probe)
         except ProbeRejected:
             continue
-        if history.was_sent(probe):
+        if not replay and history.was_sent(probe):
             continue
         signature = probe.signature()
         if signature in seen:
@@ -265,15 +270,23 @@ def _seed_probes() -> list[Probe]:
 
 
 class PlaybookAttacker:
-    """Replays the target's seed playbook, then mutates whatever landed or was blocked."""
+    """Replays the target's seed playbook, then mutates whatever landed or was blocked.
 
-    name = "playbook"
+    With `adaptive=False` it is a one-shot scanner: it sends the seeds in round one and
+    re-sends exactly the same seeds in every later round, with no mutations.
+    """
 
-    def __init__(self, target: Target | None = None) -> None:
+    name: str
+
+    def __init__(self, target: Target | None = None, *, adaptive: bool = True) -> None:
         self.target = target if target is not None else default_target()
+        self.adaptive = adaptive
+        self.name = "playbook" if adaptive else "one-shot"
 
     def plan(self, routes: list[str], history: AttackHistory, budget: int) -> list[Probe]:
         """Return the seed probes first, then mutations of known exploits."""
+        if not self.adaptive:
+            return finalize(self.target.seed_probes, routes, history, budget, replay=True)
         if not history.sent:
             batch = list(self.target.seed_probes)
         else:

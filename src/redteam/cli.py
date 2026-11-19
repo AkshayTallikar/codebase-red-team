@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from redteam.agents.attacker import Attacker, LLMAttacker, PlaybookAttacker
 from redteam.agents.patcher import LLMPatcher, Patcher, ReferencePatcher
 from redteam.arena import Arena, ArenaConfig, ArenaResult
+from redteam.bench import run_bench, write_bench
 from redteam.llm import LLMError, make_backend
 from redteam.targets import DEFAULT_TARGET, TARGETS, Target, get_target
 
@@ -47,11 +49,48 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="output directory (default runs/<UTC timestamp>)",
     )
+    bench = commands.add_parser(
+        "bench", help="run every target under four strategies and write SCORECARD.md"
+    )
+    bench.add_argument(
+        "--target",
+        choices=[*sorted(TARGETS), "all"],
+        default="all",
+        help="target to benchmark (default %(default)s)",
+    )
+    bench.add_argument("--rounds", type=int, default=DEFAULT_ROUNDS, help="maximum rounds")
+    bench.add_argument("--budget", type=int, default=DEFAULT_BUDGET, help="probes per round")
+    bench.add_argument(
+        "--out",
+        default=None,
+        help="output directory (default bench/<UTC timestamp>)",
+    )
     return parser
 
 
 def _default_out() -> str:
     return f"runs/{datetime.now(UTC):%Y%m%d-%H%M%S}"
+
+
+def _default_bench_out() -> str:
+    return f"bench/{datetime.now(UTC):%Y%m%d-%H%M%S}"
+
+
+def _bench(args: argparse.Namespace) -> int:
+    """Benchmark the chosen targets, print one line per run and write the scorecard."""
+    targets = list(TARGETS.values()) if args.target == "all" else [get_target(args.target)]
+    rows = run_bench(targets, rounds=args.rounds, budget=args.budget)
+    out_dir = Path(args.out or _default_bench_out())
+    write_bench(out_dir, rows)
+    for row in rows:
+        state = "hardened" if row.loop_hardened else "not hardened"
+        suffix = " (false confidence)" if row.false_confidence else ""
+        print(
+            f"{row.target} {row.attacker} {row.patcher}: {state}, "
+            f"audit {row.audit_landed}/{row.audit_total}{suffix}"
+        )
+    print(f"scorecard: {out_dir / 'SCORECARD.md'}")
+    return EXIT_HARDENED
 
 
 def _build_agents(backend_name: str, model: str | None, target: Target) -> tuple[Attacker, Patcher]:
@@ -79,6 +118,8 @@ def _print_rounds(result: ArenaResult) -> None:
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
+    if args.command == "bench":
+        return _bench(args)
     target = get_target(args.target)
     try:
         attacker, patcher = _build_agents(args.backend, args.model, target)
@@ -96,4 +137,8 @@ def main(argv: list[str] | None = None) -> int:
         f"result: {state}, {len(result.open_findings)} open after {len(result.rounds)} "
         f"rounds (stopped: {result.stop_reason}). output: {out_dir}"
     )
+    if result.audit is not None:
+        print(
+            f"audit: {result.audit.landed_count} of {result.audit.total} held-out exploits landed"
+        )
     return EXIT_HARDENED if result.hardened else EXIT_OPEN

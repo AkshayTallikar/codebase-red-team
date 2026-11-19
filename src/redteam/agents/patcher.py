@@ -59,16 +59,24 @@ class Patcher(Protocol):
 
 
 class ReferencePatcher:
-    """Offline patcher that replays a target's fix catalog, naive fixes first."""
+    """Offline patcher that replays a target's fix catalog.
 
-    name = "reference"
+    By default the naive fixes come first. With `skip_naive=True` they are ignored, so
+    attempt 0 is the first real fix.
+    """
 
-    def __init__(self, target: Target | None = None) -> None:
+    name: str
+
+    def __init__(self, target: Target | None = None, *, skip_naive: bool = False) -> None:
         self.target = target if target is not None else default_target()
+        self.skip_naive = skip_naive
+        self.name = "reference-correct-first" if skip_naive else "reference"
 
     def propose(self, finding: Finding, source: str, attempt: int) -> Patch | None:
         """Return the first alternative of the catalog entry that applies to `source`."""
         attempts = self.target.fix_catalog.get(finding.key, ())
+        if self.skip_naive:
+            attempts = tuple(entry for entry in attempts if not entry.naive)
         if not 0 <= attempt < len(attempts):
             return None
         entry = attempts[attempt]
