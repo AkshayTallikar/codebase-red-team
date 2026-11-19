@@ -100,7 +100,8 @@ def _build_agents(backend_name: str, model: str | None, target: Target) -> tuple
     backend = make_backend(backend_name, model)
     if backend is None:
         raise LLMError(f"no backend available for {backend_name!r}")
-    return LLMAttacker(backend, fallback=PlaybookAttacker(target)), LLMPatcher(backend)
+    attacker = LLMAttacker(backend, fallback=PlaybookAttacker(target), target=target)
+    return attacker, LLMPatcher(backend, target=target)
 
 
 def _print_rounds(result: ArenaResult) -> None:
