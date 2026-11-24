@@ -1,0 +1,24 @@
+{
+  "accepted_patches": {
+    "auth_bypass:GET /staff/report": 2,
+    "idor:GET /loans/{loan_id}": 1,
+    "mass_assignment:PATCH /members/me": 1,
+    "path_traversal:GET /covers": 2,
+    "sqli:GET /books/search": 2,
+    "ssrf:POST /covers/fetch": 1
+  },
+  "audit": {
+    "clean": true,
+    "exposed_classes": [],
+    "landed": {},
+    "landed_count": 0,
+    "target": "library",
+    "total": 11
+  },
+  "hardened": true,
+  "open_keys": [],
+  "rounds": 3,
+  "stop_reason": "clean_round",
+  "target": "library",
+  "untested": false
+}

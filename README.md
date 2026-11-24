@@ -4,7 +4,7 @@
 
 An attacker agent breaks a deliberately vulnerable web app. A patcher agent fixes it. Every fix has to survive the attacker's next round, which mutates exactly the payloads that were just blocked. Then a held-out audit checks whether the loop's own "hardened" verdict can be trusted.
 
-**Result:** when the attacker only scans once, the loop declares rushed fixes "hardened" while held-out exploits still get in (3 of 11 on one app, 7 of 11 on the other). When the attacker adapts to what was blocked, it catches every rushed fix, and every final app passes the audit. A white-box attacker that reads the source, with no hand-written exploits at all, gets the same clean result.
+**Result:** when the attacker only scans once, the loop declares rushed fixes "hardened" while held-out exploits still get in (3 of 11 on notes, 7 of 11 on billing, 5 of 11 on library). When the attacker adapts to what was blocked, it catches every rushed fix, and every final app passes the audit. A white-box attacker that reads the source, with no hand-written exploits at all, gets the same clean result on notes and billing. The scout was written alongside those two apps, so on library, a third app written by someone else, it finds none of the six bugs and its white-box runs are untested; the black-box adaptive loop still hardens library with a clean audit.
 
 ![Arms race on billing, white-box attacker](examples/billing-whitebox-run/timeline.svg)
 
@@ -22,6 +22,12 @@ billing one-shot naive-first: hardened, audit 7/11 (false confidence)
 billing one-shot correct-first: hardened, audit 0/11
 billing white-box naive-first: hardened, audit 0/11
 billing white-box correct-first: hardened, audit 0/11
+library adaptive naive-first: hardened, audit 0/11
+library adaptive correct-first: hardened, audit 0/11
+library one-shot naive-first: hardened, audit 5/11 (false confidence)
+library one-shot correct-first: hardened, audit 0/11
+library white-box naive-first: untested, audit 10/11
+library white-box correct-first: untested, audit 10/11
 ```
 
 ## Why
@@ -53,12 +59,18 @@ This project treats hardening as an adversarial loop instead:
 | billing | one-shot | correct-first | 14 | 0 | hardened | 0 of 11 landed | 0 | no |
 | billing | white-box | naive-first | 77 | 1 | hardened | 0 of 11 landed | 0 | no |
 | billing | white-box | correct-first | 44 | 0 | hardened | 0 of 11 landed | 0 | no |
+| library | adaptive | naive-first | 69 | 3 | hardened | 0 of 11 landed | 0 | no |
+| library | adaptive | correct-first | 30 | 0 | hardened | 0 of 11 landed | 0 | no |
+| library | one-shot | naive-first | 18 | 0 | hardened | 5 of 11 landed | 0 | **yes** |
+| library | one-shot | correct-first | 18 | 0 | hardened | 0 of 11 landed | 0 | no |
+| library | white-box | naive-first | 0 | 0 | untested | 10 of 11 landed | 0 | no |
+| library | white-box | correct-first | 0 | 0 | untested | 10 of 11 landed | 0 | no |
 
-- **Adaptive** sends seed hypotheses, then mutates everything that landed and every mutation that was blocked. **One-shot** replays its seeds each round, like a scanner run after every fix. **White-box** reads the app's source before every round and attacks what the [source scout](#white-box-mode) finds, with no hand-written seeds.
+- **Adaptive** sends seed hypotheses, then mutates everything that landed and every mutation that was blocked. **One-shot** replays its seeds each round, like a scanner run after every fix. **White-box** reads the app's source before every round and attacks what the [source scout](#white-box-mode) finds, with no hand-written seeds. On library the scout finds no leads, so its white-box runs send no probes and are reported **untested**: the loop tested nothing, so its verdict is not a result.
 - **Naive-first** ships the kind of rushed fix teams really merge (a keyword blocklist, a string strip), then the real fix once that one is bypassed or rejected. **Correct-first** goes straight to the real fix.
 - **Audit** replays held-out exploits against the final app, each in a fresh copy. They are written apart from the playbook and never shown to any attacker.
-- **Scout leads left** is what the static scout still flags in the final app. It agrees with the audit: the two runs it flags are exactly the two with false confidence.
-- **False confidence** means the loop reported hardened while the audit still got in. Only the one-shot attacker paired with naive fixes produces it, and on both targets it does.
+- **Scout leads left** is what the static scout still flags in the final app. On notes and billing it agrees with the audit: the runs it flags are exactly the false-confidence runs there. On library it flags nothing, even in the one-shot run that the audit gets into, so it is blind to that app (see [the design doc](docs/design.md)).
+- **False confidence** means the loop reported hardened while the audit still got in. Only the one-shot attacker paired with naive fixes produces it, and on all three targets it does.
 
 ## White-box mode
 
@@ -75,11 +87,13 @@ idor  GET /notes/{note_id}  line 93  path id note_id reaches a query and the han
 
 It finds all eight seeded weaknesses across both apps with no false leads. It keeps flagging a rushed fix, because a keyword blocklist still builds the query with an f-string. It goes quiet once the real fixes land, because a parameterised query or a resolved-path containment check clears its rule.
 
+**Does it generalise?** Not yet. The scout was written while looking at notes and billing. Run cold on library, a third app written by someone else, it found 0 of the 6 seeded weaknesses and reported no leads (see [design section 9.1](docs/design.md)). Its rules were not changed for that measurement, so that is its real recall on unseen code.
+
 Because the scout sends several variants of each exploit up front, most rushed fixes never ship: the verification gate sees a second variant still landing and rejects the patch, so the patcher escalates to the real fix. The [white-box billing run](examples/billing-whitebox-run/ARMS_RACE.md) shows this. The gate rejects the rushed SSRF and mass-assignment fixes in round 1, a rushed header fix slips through and is bypassed in round 2, and the run ends hardened with a clean audit in three rounds.
 
-## Two targets
+## Three targets
 
-Both are small FastAPI services with seeded weaknesses. A target bundles its app, the requests a legitimate user must keep making, the attacker's first hypotheses, a fix catalog and its audit exploits, so adding a third is one directory ([guide](docs/adding-a-target.md)).
+All three are small FastAPI services with seeded weaknesses. A target bundles its app, the requests a legitimate user must keep making, the attacker's first hypotheses, a fix catalog and its audit exploits, so adding one is one directory ([guide](docs/adding-a-target.md)). `library` is a book-lending service written in a different style (helper functions, `pathlib`, `str.format`, identity from a cookie). It was written without showing the scout, which is why it is the held-out test.
 
 | Target | Weakness | Rushed fix | Bypass the adaptive attacker found |
 |---|---|---|---|
@@ -90,8 +104,14 @@ Both are small FastAPI services with seeded weaknesses. A target bundles its app
 | billing | SSRF in invoice import | block the text `metadata.internal` | `http://METADATA.INTERNAL/...` |
 | billing | trusted `X-Forwarded-User` header | ignore the value `admin` | `X-Forwarded-User: Admin` |
 | billing | missing ownership check | (real fix first) | |
+| library | SQL injection in book search | block `" OR "` in capitals | `' or 1=1 --` |
+| library | path traversal in cover reads | strip `../` | `....//private/ledger_key.txt` |
+| library | SSRF in cover fetch | (real fix first) | |
+| library | missing ownership check on loans | (real fix first) | |
+| library | mass assignment on `PATCH /members/me` | (real fix first) | |
+| library | trusted `as_member` cookie | refuse the value `as_member=staff` | `As_member=staff` |
 
-The recorded runs tell each story round by round: [notes](examples/notes-run/ARMS_RACE.md), [billing](examples/billing-run/ARMS_RACE.md) and [billing, white-box](examples/billing-whitebox-run/ARMS_RACE.md). Each run writes:
+The recorded runs tell each story round by round: [notes](examples/notes-run/ARMS_RACE.md), [billing](examples/billing-run/ARMS_RACE.md), [billing, white-box](examples/billing-whitebox-run/ARMS_RACE.md) and [library](examples/library-run/ARMS_RACE.md). Each run writes:
 
 | File | What it holds |
 |---|---|
@@ -162,9 +182,12 @@ python -m redteam run --target notes --out runs/notes     # offline, determinist
 python -m redteam run --target billing --out runs/billing
 python -m redteam run --target billing --attacker white-box --out runs/whitebox
 python -m redteam scout --target billing                   # static leads only, nothing is run
+python -m redteam scout --target notes --sarif scout.sarif  # the same leads as SARIF 2.1.0
 python -m redteam bench --out runs/bench                   # all targets, six strategies, SCORECARD.md
 pytest
 ```
+
+`--sarif` writes the leads in SARIF, the format GitHub code scanning reads, so each lead can show up as a code-scanning alert. CI also runs a secret scan of every tracked file against `.secrets.baseline`.
 
 To put Claude on both sides of the fight:
 
@@ -184,6 +207,7 @@ src/redteam/
   targets/base.py            the Target value: app, checks, seeds, fixes, audit
   targets/notes/             notes service: SQL injection, IDOR, traversal, crash
   targets/billing/           invoicing service: mass assignment, SSRF, header trust, IDOR
+  targets/library/           book-lending service: SQL injection, IDOR, traversal, SSRF, mass assignment, auth bypass
   sandbox.py                 in-process loader and the path-only probe boundary
   oracle.py                  canary leak and crash detection, evidence redaction
   agents/attacker.py         PlaybookAttacker, ScoutAttacker, mutation engine, LLMAttacker
@@ -198,7 +222,7 @@ src/redteam/
   ledger.py                  append-only event log
   llm/                       LLMBackend protocol, Claude backend, offline fake
   cli.py                     redteam run, redteam scout and redteam bench
-examples/                    recorded runs (both targets, plus white-box billing) and the benchmark
+examples/                    recorded runs (all three targets, plus white-box billing) and the benchmark
 tests/                       unit tests, full offline runs, and replays of the recordings
 ```
 
@@ -208,6 +232,7 @@ The repo was built the way it describes: by agents, through an ordinary software
 
 ## Next
 
+- Generalise the scout: follow tainted values into helper functions, through `str.format` and `pathlib`, out of body fields, and identity from cookies, measured against library
 - Run the benchmark with Claude on both sides and compare it with the offline playbook
 - Point the scout at a real open-source FastAPI app and report what it finds
 - Multi-step attack chains (sign in, escalate, then read)

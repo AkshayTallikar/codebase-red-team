@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from redteam.agents.attacker import PlaybookAttacker
+from redteam.agents.attacker import PlaybookAttacker, ScoutAttacker
 from redteam.agents.patcher import ReferencePatcher
 from redteam.arena import Arena, ArenaResult
 from redteam.cli import main
-from redteam.targets import NOTES
+from redteam.targets import LIBRARY, NOTES
 from redteam.timeline import Timeline, build_timeline, render_svg, write_timeline
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -135,3 +135,13 @@ def test_cli_run_writes_timeline_and_links_it_from_the_report(tmp_path: Path) ->
     )
     summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
     assert summary["hardened"] is True
+
+
+def test_untested_run_describes_that_nothing_was_tested() -> None:
+    result = Arena(ScoutAttacker(LIBRARY), ReferencePatcher(LIBRARY), target=LIBRARY).run()
+    root = ET.fromstring(render_svg(build_timeline(result), title=TITLE))
+
+    desc = root.find(f"{SVG_NS}desc")
+    assert desc is not None and desc.text == (
+        "No probes were sent, so nothing was tested; audit exposed."
+    )

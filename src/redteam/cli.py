@@ -114,7 +114,10 @@ def _bench(args: argparse.Namespace) -> int:
     out_dir = Path(args.out or _default_bench_out())
     write_bench(out_dir, rows)
     for row in rows:
-        state = "hardened" if row.loop_hardened else "not hardened"
+        if row.loop_untested:
+            state = "untested"
+        else:
+            state = "hardened" if row.loop_hardened else "not hardened"
         suffix = " (false confidence)" if row.false_confidence else ""
         print(
             f"{row.target} {row.attacker} {row.patcher}: {state}, "
@@ -198,11 +201,17 @@ def main(argv: list[str] | None = None) -> int:
     result = Arena(attacker, patcher, target=target, config=config, out_dir=out_dir).run()
 
     _print_rounds(result)
-    state = "hardened" if result.hardened else "not hardened"
-    print(
-        f"result: {state}, {len(result.open_findings)} open after {len(result.rounds)} "
-        f"rounds (stopped: {result.stop_reason}). output: {out_dir}"
-    )
+    if result.untested:
+        print(
+            f"result: untested, the attacker sent no probes after {len(result.rounds)} "
+            f"rounds (stopped: {result.stop_reason}). output: {out_dir}"
+        )
+    else:
+        state = "hardened" if result.hardened else "not hardened"
+        print(
+            f"result: {state}, {len(result.open_findings)} open after {len(result.rounds)} "
+            f"rounds (stopped: {result.stop_reason}). output: {out_dir}"
+        )
     if result.audit is not None:
         print(
             f"audit: {result.audit.landed_count} of {result.audit.total} held-out exploits landed"

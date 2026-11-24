@@ -44,7 +44,9 @@ class Timeline:
     keys are weakness keys in order of first landing (ties sorted). cells holds one state per
     (key, round). audit maps each key to True when the audit still lands in its vulnerability
     class, and is empty when there was no audit. open_keys are the weaknesses still open when
-    the run ended; the description needs them and the cells alone cannot say.
+    the run ended; the description needs them and the cells alone cannot say. untested is True
+    when the attacker sent no probes, and audit_exposed says whether the audit landed anything
+    (None without an audit). An untested run has no weakness rows, so the audit map cannot say it.
     """
 
     keys: tuple[str, ...]
@@ -52,6 +54,8 @@ class Timeline:
     cells: dict[tuple[str, int], CellState]
     audit: dict[str, bool]
     open_keys: frozenset[str] = field(default_factory=frozenset)
+    untested: bool = False
+    audit_exposed: bool | None = None
 
 
 def build_timeline(result: ArenaResult) -> Timeline:
@@ -87,6 +91,8 @@ def build_timeline(result: ArenaResult) -> Timeline:
         cells=cells,
         audit=audit_map,
         open_keys=frozenset(key for key in keys if key in result.open_findings),
+        untested=result.untested,
+        audit_exposed=None if result.audit is None else result.audit.landed_count > 0,
     )
 
 
@@ -177,6 +183,12 @@ def render_svg(timeline: Timeline, *, title: str) -> str:
 
 def _describe(timeline: Timeline) -> str:
     """One plain sentence summarising the run for the SVG's desc element."""
+    if timeline.untested:
+        if timeline.audit_exposed is None:
+            untested_audit = "no audit"
+        else:
+            untested_audit = "audit exposed" if timeline.audit_exposed else "audit clean"
+        return f"No probes were sent, so nothing was tested; {untested_audit}."
     bypassed = sum(
         1
         for key in timeline.keys
