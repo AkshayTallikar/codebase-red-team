@@ -37,6 +37,7 @@ class BenchRow:
     exposed_classes: tuple[str, ...]
     probes_sent: int = 0
     scout_leads_left: int = 0
+    loop_untested: bool = False
 
     @property
     def false_confidence(self) -> bool:
@@ -61,6 +62,7 @@ class BenchRow:
             "false_confidence": self.false_confidence,
             "probes_sent": self.probes_sent,
             "scout_leads_left": self.scout_leads_left,
+            "loop_untested": self.loop_untested,
         }
 
 
@@ -91,6 +93,7 @@ def _row(target: Target, attacker: str, patcher: str, result: ArenaResult) -> Be
         exposed_classes=tuple(result.audit.exposed_classes),
         probes_sent=sum(summary.probes_sent for summary in result.rounds),
         scout_leads_left=len(scout_target(target, result.final_source)),
+        loop_untested=result.untested,
     )
 
 
@@ -121,8 +124,28 @@ def _headline(rows: Sequence[BenchRow]) -> str:
         _false_confidence_sentence(rows),
         _adaptive_sentence(rows),
         _white_box_sentence(rows),
+        _untested_sentence(rows),
     ]
     return " ".join(part for part in parts if part)
+
+
+def _untested_sentence(rows: Sequence[BenchRow]) -> str:
+    """One sentence per target and attacker whose runs sent no probes, with the audit they got."""
+    groups: dict[tuple[str, str], list[BenchRow]] = {}
+    for row in rows:
+        if row.loop_untested:
+            groups.setdefault((row.target, row.attacker), []).append(row)
+    sentences = []
+    for (target, attacker), group in groups.items():
+        audits = [row.audit_landed for row in group]
+        total = group[0].audit_total
+        low, high = min(audits), max(audits)
+        landed = f"{low} of {total}" if low == high else f"{low} to {high} of {total}"
+        sentences.append(
+            f"On {target} the {attacker} attacker sent no probes, so those runs are reported "
+            f"untested; the audit landed {landed} there."
+        )
+    return " ".join(sentences)
 
 
 def _false_confidence_sentence(rows: Sequence[BenchRow]) -> str:
@@ -185,7 +208,7 @@ def render_scorecard(rows: Sequence[BenchRow]) -> str:
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
-        loop = "hardened" if row.loop_hardened else "not hardened"
+        loop = _loop_word(row)
         lines.append(
             f"| {row.target} | {row.attacker} | {row.patcher} | {row.rounds} | "
             f"{row.probes_sent} | {row.exploits_found} | {row.bypasses_caught} | "
@@ -214,8 +237,17 @@ def render_scorecard(rows: Sequence[BenchRow]) -> str:
         '- "Scout leads left" counts the static leads the scout still sees in the final app. '
         "Zero means the scout agrees the app is fixed.",
         '- "False confidence" means the loop reported hardened while the audit still got in.',
+        '- "untested" means the attacker sent no probes, so the loop tested nothing and the run is '
+        "not reported hardened.",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _loop_word(row: BenchRow) -> str:
+    """The loop's verdict for one row, as the scorecard and the CLI print it."""
+    if row.loop_untested:
+        return "untested"
+    return "hardened" if row.loop_hardened else "not hardened"
 
 
 def write_bench(out_dir: Path, rows: Sequence[BenchRow]) -> None:

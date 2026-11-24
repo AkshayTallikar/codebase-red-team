@@ -68,9 +68,14 @@ class ArenaResult:
     audit: AuditResult | None = None
 
     @property
+    def untested(self) -> bool:
+        """True when the attacker sent no probes at all, so the run tested nothing."""
+        return sum(summary.probes_sent for summary in self.rounds) == 0
+
+    @property
     def hardened(self) -> bool:
-        """True when no weakness is left open."""
-        return not self.open_findings
+        """True when no weakness is left open and the attacker sent at least one probe."""
+        return not self.open_findings and not self.untested
 
 
 class Arena:
@@ -289,14 +294,7 @@ class _Campaign:
         final_source = self._source()
         accepted = {key: count for key, count in self.attempts.items() if count}
         open_keys = sorted(self.open_findings)
-        self.ledger.log(
-            "run_finished",
-            stop_reason=stop_reason,
-            hardened=not self.open_findings,
-            open_keys=open_keys,
-            accepted_patches=accepted,
-        )
-        return ArenaResult(
+        result = ArenaResult(
             rounds=rounds,
             final_source=final_source,
             regressions={key: list(probes) for key, probes in self.regressions.items()},
@@ -305,6 +303,15 @@ class _Campaign:
             stop_reason=stop_reason,
             bypassed_keys=frozenset(self.reopened),
         )
+        self.ledger.log(
+            "run_finished",
+            stop_reason=stop_reason,
+            hardened=result.hardened,
+            untested=result.untested,
+            open_keys=open_keys,
+            accepted_patches=accepted,
+        )
+        return result
 
 
 def _write_outputs(
@@ -328,6 +335,7 @@ def _write_outputs(
         "target": target_name,
         "stop_reason": result.stop_reason,
         "hardened": result.hardened,
+        "untested": result.untested,
         "rounds": len(result.rounds),
         "accepted_patches": result.accepted_patches,
         "open_keys": sorted(result.open_findings),
@@ -415,7 +423,10 @@ def render_report(
     target_name: str = "notes",
 ) -> str:
     """Render the arms race as Markdown: a scoreboard, then one section per round."""
-    verdict = "hardened" if result.hardened else "not hardened"
+    if result.untested:
+        verdict = "untested"
+    else:
+        verdict = "hardened" if result.hardened else "not hardened"
     lines = [
         "# Arms race report",
         "",
@@ -423,6 +434,10 @@ def render_report(
         f"Attacker: {attacker_name} · Patcher: {patcher_name} · Rounds: {len(result.rounds)} · "
         f"Stopped: {result.stop_reason} · Result: {verdict}, {len(result.open_findings)} open",
         "",
+    ]
+    if result.untested:
+        lines += ["The attacker sent no probes, so nothing was tested.", ""]
+    lines += [
         "![Arms-race timeline](timeline.svg)",
         "",
         "## Scoreboard",

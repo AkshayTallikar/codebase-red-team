@@ -14,7 +14,9 @@ from redteam.cli import main
 from redteam.models import Finding
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
-from redteam.targets import BILLING, NOTES, TARGETS, Target
+from redteam.targets import BILLING, LIBRARY, NOTES, TARGETS, Target
+
+TARGET_ORDER = ("notes", "billing", "library")
 
 
 def _seed_finding(target: Target, key: str) -> Finding:
@@ -28,7 +30,7 @@ def _seed_finding(target: Target, key: str) -> Finding:
 
 @pytest.fixture(scope="module")
 def rows() -> list[BenchRow]:
-    return run_bench([NOTES, BILLING])
+    return run_bench([NOTES, BILLING, LIBRARY])
 
 
 def test_one_shot_attacker_resends_the_seeds_and_stops_clean() -> None:
@@ -67,9 +69,9 @@ def test_naive_first_sqli_fix_is_the_keyword_block() -> None:
     assert patch.author == "reference"
 
 
-def test_bench_covers_both_targets_under_six_strategies(rows: list[BenchRow]) -> None:
-    assert len(rows) == 12
-    assert {row.target for row in rows} == {"notes", "billing"}
+def test_bench_covers_every_target_under_six_strategies(rows: list[BenchRow]) -> None:
+    assert len(rows) == 18
+    assert {row.target for row in rows} == set(TARGET_ORDER)
     combos = {(row.attacker, row.patcher) for row in rows}
     assert combos == {
         (attacker, patcher)
@@ -84,7 +86,7 @@ def test_bench_rows_are_ordered_per_target_then_attacker_then_patcher(
     order = [(row.target, row.attacker, row.patcher) for row in rows]
     expected = [
         (target, attacker, patcher)
-        for target in ("notes", "billing")
+        for target in TARGET_ORDER
         for attacker in ("adaptive", "one-shot", "white-box")
         for patcher in ("naive-first", "correct-first")
     ]
@@ -92,7 +94,7 @@ def test_bench_rows_are_ordered_per_target_then_attacker_then_patcher(
 
 
 def test_white_box_rows_use_the_scout_and_send_probes(rows: list[BenchRow]) -> None:
-    white = [row for row in rows if row.attacker == "white-box"]
+    white = [row for row in rows if row.attacker == "white-box" and row.target != "library"]
     assert len(white) == 4
     assert all(row.probes_sent > 0 for row in white)
     assert all(row.exploits_found > 0 for row in white)
@@ -100,15 +102,34 @@ def test_white_box_rows_use_the_scout_and_send_probes(rows: list[BenchRow]) -> N
 
 
 def test_white_box_correct_first_runs_end_hardened_with_no_leads(rows: list[BenchRow]) -> None:
-    correct = [r for r in rows if r.attacker == "white-box" and r.patcher == "correct-first"]
+    correct = [
+        r
+        for r in rows
+        if r.attacker == "white-box" and r.patcher == "correct-first" and r.target != "library"
+    ]
     assert len(correct) == 2
     assert all(row.loop_hardened and row.audit_landed == 0 for row in correct)
     assert all(row.scout_leads_left == 0 for row in correct)
 
 
+def test_white_box_runs_on_library_are_untested_and_not_hardened(rows: list[BenchRow]) -> None:
+    library = [r for r in rows if r.attacker == "white-box" and r.target == "library"]
+    assert len(library) == 2
+    assert all(row.loop_untested for row in library)
+    assert all(row.probes_sent == 0 and row.exploits_found == 0 for row in library)
+    assert all(not row.loop_hardened for row in library)
+    # The scout finds no leads on library, so the loop never attacks it. The audit still lands.
+    assert all(row.audit_landed == 10 and row.audit_total == 11 for row in library)
+
+
+def test_only_library_white_box_runs_are_untested(rows: list[BenchRow]) -> None:
+    untested = [row for row in rows if row.loop_untested]
+    assert {(row.target, row.attacker) for row in untested} == {("library", "white-box")}
+
+
 def test_adaptive_runs_are_hardened_and_pass_the_audit(rows: list[BenchRow]) -> None:
     adaptive = [row for row in rows if row.attacker == "adaptive"]
-    assert len(adaptive) == 4
+    assert len(adaptive) == 6
     assert all(row.loop_hardened for row in adaptive)
     assert all(row.audit_landed == 0 for row in adaptive)
 
@@ -117,9 +138,23 @@ def test_one_shot_naive_first_reports_hardened_while_the_audit_gets_in(
     rows: list[BenchRow],
 ) -> None:
     flagged = [r for r in rows if r.attacker == "one-shot" and r.patcher == "naive-first"]
-    assert len(flagged) == 2
+    assert len(flagged) == 3
     assert all(row.loop_hardened and row.false_confidence for row in flagged)
     assert all(row.audit_landed > 0 for row in flagged)
+
+
+def test_library_one_shot_naive_first_lets_five_held_out_exploits_in(
+    rows: list[BenchRow],
+) -> None:
+    row = next(
+        r
+        for r in rows
+        if (r.target, r.attacker, r.patcher) == ("library", "one-shot", "naive-first")
+    )
+    assert row.loop_hardened and row.false_confidence
+    assert (row.audit_landed, row.audit_total) == (5, 11)
+    assert row.scout_leads_left == 0
+    assert set(row.exposed_classes) == {"auth_bypass", "path_traversal", "sqli"}
 
 
 def test_false_confidence_appears_only_for_one_shot_naive_first(rows: list[BenchRow]) -> None:
@@ -129,8 +164,20 @@ def test_false_confidence_appears_only_for_one_shot_naive_first(rows: list[Bench
 
 def test_correct_first_runs_catch_no_bypass(rows: list[BenchRow]) -> None:
     correct = [row for row in rows if row.patcher == "correct-first"]
-    assert len(correct) == 6
+    assert len(correct) == 9
     assert all(row.bypasses_caught == 0 for row in correct)
+
+
+def test_untested_row_serialises_its_flag(rows: list[BenchRow]) -> None:
+    library_white = next(
+        row
+        for row in rows
+        if (row.target, row.attacker, row.patcher) == ("library", "white-box", "naive-first")
+    )
+    entry = library_white.to_dict()
+    assert entry["loop_untested"] is True
+    assert entry["loop_hardened"] is False
+    assert entry["probes_sent"] == 0
 
 
 def test_scorecard_has_the_table_header_and_headline(rows: list[BenchRow]) -> None:
@@ -140,12 +187,18 @@ def test_scorecard_has_the_table_header_and_headline(rows: list[BenchRow]) -> No
         "| Bypasses caught | Patches | Lines changed | Loop says | Audit | Scout leads left "
         "| False confidence |"
     ) in text
-    assert "**Headline:** 2 of 12 runs reported a hardened app" in text
+    assert "**Headline:** 3 of 18 runs reported a hardened app" in text
     assert "## Exposure left behind" in text
     assert "Every adaptive run that reported hardened passed the audit." in text
     assert "starting from no hand-written exploits." in text
+    assert (
+        "On library the white-box attacker sent no probes, so those runs are reported untested; "
+        "the audit landed 10 of 11 there."
+    ) in text
+    assert "| library | white-box | naive-first | 1 | 0 | 0 | 0 | 0 | 0 | untested |" in text
     assert '- "Probes sent" is the attack cost' in text
     assert '- "Scout leads left" counts the static leads' in text
+    assert '- "untested" means the attacker sent no probes' in text
 
 
 def test_headline_says_so_when_no_run_has_false_confidence() -> None:
@@ -166,9 +219,10 @@ def test_headline_says_so_when_no_run_has_false_confidence() -> None:
     text = render_scorecard([row])
     assert "No run reported a hardened app that the audit could break into." in text
     assert "None: every final app passed the audit." in text
+    assert "untested" not in text.split("## Exposure left behind")[0]
 
 
-def test_bench_command_writes_the_scorecard_and_json(tmp_path) -> None:
+def test_bench_command_writes_the_scorecard_and_json(tmp_path, capsys) -> None:
     assert main(["bench", "--out", str(tmp_path)]) == 0
 
     scorecard = (tmp_path / "SCORECARD.md").read_text(encoding="utf-8")
@@ -177,3 +231,8 @@ def test_bench_command_writes_the_scorecard_and_json(tmp_path) -> None:
     assert len(data) == 6 * len(TARGETS)
     assert all("false_confidence" in entry for entry in data)
     assert all("probes_sent" in entry and "scout_leads_left" in entry for entry in data)
+    assert all("loop_untested" in entry for entry in data)
+
+    printed = capsys.readouterr().out.splitlines()
+    assert "library white-box naive-first: untested, audit 10/11" in printed
+    assert "library one-shot naive-first: hardened, audit 5/11 (false confidence)" in printed

@@ -257,3 +257,60 @@ def test_cli_anthropic_backend_failure_returns_two(
     code = main(["run", "--backend", "anthropic", "--out", str(tmp_path / "run")])
     assert code == 2
     assert "anthropic" in capsys.readouterr().err
+
+
+class SilentAttacker:
+    """An attacker whose plan is always empty, so it never sends a probe."""
+
+    name = "silent"
+
+    def plan(self, routes: list[str], history, budget: int) -> list[Probe]:
+        return []
+
+
+def test_attacker_that_sends_no_probes_is_untested_not_hardened(tmp_path: Path) -> None:
+    out = tmp_path / "run"
+    result = Arena(
+        SilentAttacker(), ReferencePatcher(), config=ArenaConfig(rounds=3), out_dir=out
+    ).run()
+
+    assert result.untested
+    assert not result.hardened
+    assert result.stop_reason == "attacker_exhausted"
+
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["untested"] is True
+    assert summary["hardened"] is False
+
+    events = [
+        json.loads(line) for line in (out / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    finished = events[-1]
+    assert finished["kind"] == "run_finished"
+    assert finished["untested"] is True
+    assert finished["hardened"] is False
+
+
+def test_report_names_the_untested_verdict_and_says_nothing_was_tested(tmp_path: Path) -> None:
+    out = tmp_path / "run"
+    Arena(SilentAttacker(), ReferencePatcher(), config=ArenaConfig(rounds=3), out_dir=out).run()
+
+    report = (out / "ARMS_RACE.md").read_text(encoding="utf-8")
+    assert "Result: untested, 0 open" in report
+    assert "The attacker sent no probes, so nothing was tested." in report
+    assert "Result: hardened" not in report
+
+
+def test_cli_prints_untested_for_a_white_box_run_that_finds_no_leads(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "run"
+    code = main(["run", "--target", "library", "--attacker", "white-box", "--out", str(out)])
+
+    assert code == 1
+    printed = capsys.readouterr().out
+    assert (
+        f"result: untested, the attacker sent no probes after 1 rounds "
+        f"(stopped: attacker_exhausted). output: {out}"
+    ) in printed
+    assert "result: hardened" not in printed

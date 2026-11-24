@@ -41,6 +41,7 @@ Two things are easy to get wrong:
 
 ```bash
 python -m redteam scout --target <name>              # the scout should find every seeded weakness
+python -m redteam scout --target <name> --sarif scout.sarif  # the same leads, as SARIF for code scanning
 python -m redteam run --target <name> --out runs/x   # black-box playbook
 python -m redteam run --target <name> --attacker white-box --out runs/y
 python -m redteam bench --target <name> --out runs/bench

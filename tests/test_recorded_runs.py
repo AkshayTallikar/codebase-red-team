@@ -21,14 +21,24 @@ from redteam.cli import DEFAULT_BUDGET, DEFAULT_ROUNDS
 from redteam.models import Probe
 from redteam.oracle import Oracle
 from redteam.sandbox import Sandbox
-from redteam.targets import BILLING, NOTES, Target
+from redteam.targets import BILLING, LIBRARY, NOTES, Target
 from redteam.timeline import build_timeline, render_svg
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 CANARY_PATTERN = re.compile(rb"CANARY-[0-9a-f]{16}")
-RUNS = [("notes-run", NOTES), ("billing-run", BILLING), ("billing-whitebox-run", BILLING)]
+RUNS = [
+    ("notes-run", NOTES),
+    ("billing-run", BILLING),
+    ("billing-whitebox-run", BILLING),
+    ("library-run", LIBRARY),
+]
 # The attacker each recording was made with, as the CLI names it.
-ATTACKER = {"notes-run": "playbook", "billing-run": "playbook", "billing-whitebox-run": "white-box"}
+ATTACKER = {
+    "notes-run": "playbook",
+    "billing-run": "playbook",
+    "billing-whitebox-run": "white-box",
+    "library-run": "playbook",
+}
 
 
 def _regressions(run: str) -> dict[str, list[Probe]]:
@@ -55,8 +65,8 @@ def fresh_runs() -> dict[str, ArenaResult]:
 
 @pytest.fixture(scope="module")
 def bench_rows() -> list[dict]:
-    """One benchmark over both targets, shared by every test in this module."""
-    rows = run_bench([NOTES, BILLING], rounds=DEFAULT_ROUNDS, budget=DEFAULT_BUDGET)
+    """One benchmark over every target, shared by every test in this module."""
+    rows = run_bench([NOTES, BILLING, LIBRARY], rounds=DEFAULT_ROUNDS, budget=DEFAULT_BUDGET)
     return [row.to_dict() for row in rows]
 
 
@@ -139,9 +149,10 @@ def test_bench_scorecard_has_a_headline() -> None:
     assert any(line.startswith("**Headline:**") for line in text.splitlines())
 
 
-def test_bench_scorecard_records_twelve_runs_with_the_new_columns() -> None:
+def test_bench_scorecard_records_eighteen_runs_with_the_new_columns() -> None:
     recorded = json.loads((EXAMPLES / "bench" / "scorecard.json").read_text(encoding="utf-8"))
-    assert len(recorded) == 12
+    assert len(recorded) == 18
+    assert {entry["target"] for entry in recorded} == {"notes", "billing", "library"}
     assert {entry["attacker"] for entry in recorded} == {"adaptive", "one-shot", "white-box"}
     assert all(isinstance(entry["probes_sent"], int) for entry in recorded)
     assert all(isinstance(entry["scout_leads_left"], int) for entry in recorded)
@@ -162,3 +173,10 @@ def test_whitebox_recording_shows_the_gate_rejecting_naive_fixes() -> None:
     text = (EXAMPLES / "billing-whitebox-run" / "ARMS_RACE.md").read_text(encoding="utf-8")
     assert "Attacker: white-box" in text
     assert "attempt 0, rejected" in text
+
+
+def test_library_run_is_hardened_by_the_playbook_and_untested_flag_is_false() -> None:
+    summary = json.loads((EXAMPLES / "library-run" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["untested"] is False
+    assert summary["rounds"] == 3
+    assert summary["audit"]["landed_count"] == 0

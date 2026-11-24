@@ -1,6 +1,6 @@
 # Design: Codebase Red Team
 
-Status: milestones 1, 2 and 3 shipped (sections 7 and 8); milestone 4 in progress (section 9)
+Status: milestones 1 to 4 shipped (sections 7 to 9); section 9.2 not done
 Author: Akshay Tallikar
 
 ## 1. Problem
@@ -404,6 +404,8 @@ weakness found, naive fixes still flagged, nothing flagged after the real fixes.
 The milestone reports scout recall and false leads on all three targets, before
 and after.
 
+Not done in milestone 4. The scout's rules are unchanged, so the cold result in 9.1 is its recall on unseen code; generalising it is the first next step.
+
 ### 9.3 Scout output for code scanning, and secret scanning
 
 `redteam scout --sarif` writes SARIF 2.1.0, the format GitHub code scanning and
@@ -413,7 +415,7 @@ tree on every push, against a committed baseline.
 
 ### 9.4 Milestone 4 scope
 
-1. The held-out `library` target, and the scout's cold result on it.
-2. General scout rules that find what it missed, without losing anything on the first two targets, and an "untested" verdict for a run that sent no probes.
-3. SARIF output and secret scanning in CI.
-4. README, design, recordings and scorecard refreshed for three targets.
+1. The held-out `library` target, and the scout's cold result on it (done).
+2. General scout rules that find what it missed, without losing anything on the first two targets (not done), and an "untested" verdict for a run that sent no probes (done).
+3. SARIF output and secret scanning in CI (done).
+4. README, design, recordings and scorecard refreshed for three targets (done).

